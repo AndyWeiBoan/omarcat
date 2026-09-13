@@ -171,6 +171,10 @@ named in full. Abbreviations live only in the bar, where height is scarce:
 the readouts stack the module's letters (CPU, MEM, DSK, NET) the way iStat
 Menus labels its menubar items, unless you prefer glyphs.
 
+## Packaging maintenance
+
+Release packaging uses the [native-packages](https://rubygems.org/gems/native-packages) gem. `native-packages.yaml` declares packages and downstream repositories; native recipes and installation assets live in `packaging/`; see [PACKAGING.md](PACKAGING.md) for local commands and CI behavior.
+
 ## License
 
 MIT
