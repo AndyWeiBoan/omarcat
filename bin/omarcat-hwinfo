@@ -1,0 +1,119 @@
+#!/bin/sh
+# Hardware identity for the Overview page: one `key<TAB>model<TAB>spec` line
+# per subsystem, where spec is optional and the caller joins the two. Everything here is readable as an ordinary user -- no root, no
+# dmidecode -- which is why memory reports its capacity rather than a part
+# number: the DIMM model lives in DMI and DMI needs root.
+#
+# Run once, not polled. None of these change while the session is up.
+
+set -eu
+
+emit() { [ -n "${2:-}" ] && printf '%s\t%s\t%s\n' "$1" "$2" "${3:-}" || true; }
+
+# ---------------------------------------------------------------- cpu
+# "11th Gen Intel(R) Core(TM) i7-1185G7 @ 3.00GHz" is the raw string. The
+# trademark noise and the clock are dropped: the clock is not a fixed property
+# of the part, and the row has one line to say what this is.
+cpu=$(sed -n 's/^model name[[:space:]]*: *//p' /proc/cpuinfo | head -1)
+cpu=$(printf '%s' "$cpu" | sed -e 's/([RrTtMm][MmDd]*)//g' -e 's/ @.*$//' \
+                                -e 's/  */ /g' -e 's/^ *//' -e 's/ *$//')
+# Cores and threads come from the first physical package; the boost clock is
+# the one number a spec sheet would print, and unlike the base clock it is a
+# fixed property of the part.
+cores=$(sed -n 's/^cpu cores[[:space:]]*: *//p' /proc/cpuinfo | head -1)
+threads=$(sed -n 's/^siblings[[:space:]]*: *//p' /proc/cpuinfo | head -1)
+khz=$(cat /sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_max_freq 2>/dev/null || true)
+cpu_spec=""
+[ -n "$cores" ] && [ -n "$threads" ] && cpu_spec="${cores}C/${threads}T"
+if [ -n "$khz" ]; then
+  ghz=$(awk -v k="$khz" 'BEGIN{printf "%.1f GHz", k/1000000}')
+  [ -n "$cpu_spec" ] && cpu_spec="$cpu_spec \xc2\xb7 $ghz" || cpu_spec="$ghz"
+fi
+emit cpu "$cpu" "$(printf '%b' "$cpu_spec")"
+
+# ---------------------------------------------------------------- memory
+# MemTotal is what the kernel can hand out, which is always a little under the
+# sticks that are fitted -- firmware and the iGPU take their cut first. Reported
+# in GiB and snapped to the size a human would name: 31.05 GiB is a 32 GB
+# machine, and printing 33 GB (the decimal conversion) reads as simply wrong.
+kb=$(sed -n 's/^MemTotal:[[:space:]]*\([0-9]*\).*/\1/p' /proc/meminfo)
+if [ -n "$kb" ]; then
+  emit memory "$(awk -v k="$kb" 'BEGIN{
+    g = k / 1048576
+    if (g >= 8) g = int(g / 4 + 0.5) * 4     # 8 GB and up come in fours
+    else        g = int(g + 0.5)
+    printf "%d GB", g
+  }')"
+fi
+
+# ---------------------------------------------------------------- disk
+# The root filesystem's backing device, walked back to the physical disk:
+# a partition (nvme0n1p2) has no model of its own, its parent does.
+root_src=$(awk '$2=="/" {print $1; exit}' /proc/self/mounts 2>/dev/null || true)
+disk=""
+if [ -n "$root_src" ]; then
+  name=$(basename "$root_src")
+  for d in /sys/block/*; do
+    b=$(basename "$d")
+    case "$name" in
+      "$b"|"$b"p[0-9]*|"$b"[0-9]*) disk="$b"; break ;;
+    esac
+  done
+fi
+# btrfs and LVM report a mapper/UUID device rather than a block name; fall back
+# to the first real disk, which is what a single-disk laptop has anyway.
+[ -z "$disk" ] && disk=$(ls /sys/block 2>/dev/null | grep -m1 -E '^(nvme|sd|mmcblk)' || true)
+if [ -n "$disk" ]; then
+  m=$(cat "/sys/block/$disk/device/model" 2>/dev/null || true)
+  [ -z "$m" ] && m=$(cat "/sys/block/$disk/device/device/model" 2>/dev/null || true)
+  sectors=$(cat "/sys/block/$disk/size" 2>/dev/null || true)
+  # Decimal GB, because that is the number printed on the drive.
+  cap=""
+  [ -n "$sectors" ] && cap=$(awk -v s="$sectors" 'BEGIN{printf "%.0f GB", s*512/1e9}')
+  emit disk "$(printf '%s' "$m" | sed -e 's/  */ /g' -e 's/^ *//' -e 's/ *$//')" "$cap"
+fi
+
+# ---------------------------------------------------------------- battery
+for b in /sys/class/power_supply/BAT*; do
+  [ -d "$b" ] || continue
+  mk=$(cat "$b/manufacturer" 2>/dev/null || true)
+  md=$(cat "$b/model_name" 2>/dev/null || true)
+  # Design capacity, not present capacity: this line says what the part is.
+  # How much of it survives is wear, and the Overview already shows that.
+  dsg=$(cat "$b/energy_full_design" 2>/dev/null || true)
+  [ -z "$dsg" ] && dsg=$(cat "$b/charge_full_design" 2>/dev/null || true)
+  wh=""
+  [ -n "$dsg" ] && wh=$(awk -v d="$dsg" 'BEGIN{printf "%.0f Wh", d/1000000}')
+  emit battery "$(printf '%s %s' "$mk" "$md" | sed -e 's/  */ /g' -e 's/^ *//' -e 's/ *$//')" "$wh"
+  break
+done
+
+# ---------------------------------------------------------------- network
+# The default route's interface, resolved through its PCI/USB ids to a real
+# product name. The driver name (iwlwifi) is not a model, and pci.ids is the
+# only local table that turns 8086:a0f0 into "Wi-Fi 6 AX201" -- 1.6MB of it,
+# which is why this is a one-shot script and not a QML file read.
+iface=$(awk '$2=="00000000" {print $1; exit}' /proc/net/route 2>/dev/null || true)
+[ -z "$iface" ] && iface=$(ls /sys/class/net 2>/dev/null | grep -m1 -E '^(wl|en|eth)' || true)
+if [ -n "$iface" ] && [ -e "/sys/class/net/$iface/device/vendor" ]; then
+  v=$(sed 's/^0x//' "/sys/class/net/$iface/device/vendor" 2>/dev/null || true)
+  d=$(sed 's/^0x//' "/sys/class/net/$iface/device/device" 2>/dev/null || true)
+  ids=/usr/share/hwdata/pci.ids
+  if [ -n "$v" ] && [ -n "$d" ] && [ -r "$ids" ]; then
+    emit network "$(awk -v v="$v" -v d="$d" '
+      /^#/ || /^$/ { next }
+      /^[0-9a-f]/  { invendor = ($1 == v); vname = substr($0, index($0, $2)); next }
+      invendor && /^\t[0-9a-f]/ {
+        sub(/^\t/, "")
+        if ($1 == d) {
+          dname = substr($0, index($0, $2))
+          sub(/ *$/, "", vname); sub(/ *$/, "", dname)
+          # "Intel Corporation" -> "Intel": the vendor suffix is noise in a
+          # one-line label that already names the product.
+          sub(/ (Corporation|Corp\.|Inc\.|Ltd\.|Technology|Technologies).*$/, "", vname)
+          print vname " " dname
+          exit
+        }
+      }' "$ids")"
+  fi
+fi

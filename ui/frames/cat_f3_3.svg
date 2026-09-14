@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 60 32" width="60" height="32">
+  <!-- RunCat: fatness 3 of 3, gallop frame 3 of 5. CPU load picks the
+       frame, memory pressure picks the fatness. White; the widget
+       recolours it to the bar text colour. -->
+  <path d="M14 15.20 C 6 14.20, 3.5 8.20, 8.5 3.70" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round"/>
+  <rect x="12" y="5.65" width="30" height="19.10" rx="9.55" fill="#fff"/>
+  <circle cx="46" cy="15.20" r="8.65" fill="#fff"/>
+  <path d="M40.50 9.70 L41.00 3.50 L46.00 6.90 Z" fill="#fff"/>
+  <path d="M52.50 9.70 L51.60 3.90 L47.60 7.10 Z" fill="#fff"/>
+  <path d="M17 23.25 L18 30" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round"/>
+  <path d="M17 23.25 L19 26.5" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round"/>
+  <path d="M37 23.25 L38 30" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round"/>
+  <path d="M37 23.25 L37 26.5" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round"/>
+</svg>

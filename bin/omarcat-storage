@@ -1,0 +1,78 @@
+#!/bin/sh
+# Where the disk went, from sources that need no privileges.
+#
+# Emits TSV: <key>\t<bytes>\t<extra>. Bytes of -1 means "this exists but cannot
+# be measured from here" -- which is a real answer, and a better one than
+# folding it silently into an "other" bucket.
+#
+# Deliberately NOT a category breakdown in the macOS sense. macOS gets
+# Applications/Documents/Photos out of Spotlight and system APIs; Linux has no
+# equivalent, and on a btrfs root with snapshots the walkable paths do not even
+# add up to the used space -- snapshots hold the difference and live outside
+# every live path, behind root-only subvolume calls. A pie chart built from
+# what an unprivileged walk can see would put two thirds of this machine in
+# "other", which looks like an answer without being one.
+#
+# So this reports what it can actually account for, says so when it cannot, and
+# leans towards the things a person can act on: caches that are safe to clear.
+
+set -u
+LC_ALL=C
+export LC_ALL
+
+emit() { printf '%s\t%s\t%s\n' "$1" "$2" "${3:-}"; }
+
+# --- what the filesystem itself says is used -------------------------------
+# The ground truth every other figure is measured against. df reports the
+# mounted root, which is the same thing the Disks page shows.
+df -B1 --output=used,size / 2>/dev/null | awk 'NR==2 {print $1"\t"$2}' | {
+  IFS='	' read -r used size || exit 0
+  emit fs_used "${used:-0}"
+  emit fs_size "${size:-0}"
+}
+
+# --- installed packages ----------------------------------------------------
+# Straight out of the package database: no filesystem walk, ~0.1s for 20k
+# packages. This is the closest honest equivalent to macOS's "Applications" and
+# "System", and it is the one category that is cheap to get exactly right.
+if command -v pacman >/dev/null 2>&1; then
+  pacman -Qi 2>/dev/null | awk -F': *' '
+    /^Installed Size/ {
+      v = $2; n = v + 0
+      if (v ~ /KiB/)      n *= 1024
+      else if (v ~ /MiB/) n *= 1048576
+      else if (v ~ /GiB/) n *= 1073741824
+      total += n; count++
+    }
+    END { if (count > 0) printf "packages\t%d\t%d\n", total, count }'
+fi
+
+# --- caches that are safe to clear ----------------------------------------
+for dir in /var/cache/pacman/pkg "${XDG_CACHE_HOME:-$HOME/.cache}"; do
+  [ -d "$dir" ] || continue
+  [ -r "$dir" ] || { emit "cache:$dir" -1; continue; }
+  size=$(du -sx --block-size=1 "$dir" 2>/dev/null | awk '{print $1}')
+  [ -n "${size:-}" ] && emit "cache:$dir" "$size"
+done
+
+# --- home, and where inside it -------------------------------------------
+if [ -d "$HOME" ]; then
+  du -xd1 --block-size=1 "$HOME" 2>/dev/null | awk -v home="$HOME" '
+    $2 == home { total = $1; next }
+    { sub(home "/", "", $2); print "home:" $2 "\t" $1 "\t" }
+    END { if (total > 0) print "home\t" total "\t" }'
+fi
+
+# --- snapshots -------------------------------------------------------------
+# On a btrfs root with snapper or timeshift this is usually the largest single
+# consumer, and it is unreadable without root. Saying "needs root" is the
+# honest report; guessing is not.
+for dir in /.snapshots /timeshift; do
+  [ -d "$dir" ] || continue
+  if [ -r "$dir" ]; then
+    size=$(du -sx --block-size=1 "$dir" 2>/dev/null | awk '{print $1}')
+    [ -n "${size:-}" ] && emit "snapshots:$dir" "$size"
+  else
+    emit "snapshots:$dir" -1
+  fi
+done

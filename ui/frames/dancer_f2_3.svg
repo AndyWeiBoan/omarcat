@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 60 32" width="60" height="32">
+  <!-- dancer: fatness 2 of 3, frame 3 of 5.
+       CPU load picks the frame, memory pressure thickens the figure.
+       White; the widget recolours it to the bar text colour. Generated
+       by tools/make-runner.py; edit the spec there, not this file. -->
+  <circle cx="33.0565" cy="2.0545" r="5.6" fill="#fff"/>
+  <path d="M32.2336 9.3545 L30 18.5545" fill="none" stroke="#fff" stroke-width="6.8" stroke-linecap="round"/>
+  <path d="M29.0336 9.8263 L24.9878 14.2263 L21.9191 11.0263" fill="none" stroke="#fff" stroke-width="3.9" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M35.4336 12.8828 L36.1878 17.2828 L34.3191 14.0828" fill="none" stroke="#fff" stroke-width="3.9" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M28.6 18.5545 L24.658 23.8606 L18.5 28.6" fill="none" stroke="#fff" stroke-width="3.9" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M31.4 18.5545 L37.458 24.4484 L41.5 28.6" fill="none" stroke="#fff" stroke-width="3.9" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

@@ -1,0 +1,109 @@
+{
+  "schemaVersion": 1,
+  "id": "io.github.andyweiboan.omarcat",
+  "name": "Omarcat",
+  "version": "0.1.0",
+  "author": "Andy Wei",
+  "license": "MIT",
+  "description": "System monitor for the Omarchy bar with a cat that runs faster the busier the CPU is: an overview of CPU, memory, disk, battery and network at a glance, plus per-subsystem pages with live graphs.",
+  "kinds": [
+    "service",
+    "bar-widget"
+  ],
+  "keepLoaded": true,
+  "entryPoints": {
+    "service": "OmaStatsService.qml",
+    "barWidget": "OmaStatsWidget.qml"
+  },
+  "barWidget": {
+    "displayName": "Omarcat",
+    "description": "A cat in the bar that runs faster the busier the CPU is, and an iStat Menus-style panel behind it: an overview of the whole machine at a glance, plus pages for the processor, memory, disks and network.",
+    "category": "System",
+    "aliases": [
+      "omarcat",
+      "cat",
+      "runcat",
+      "stats",
+      "system-monitor",
+      "activity-monitor",
+      "sysmon",
+      "monitor",
+      "istat"
+    ],
+    "allowMultiple": true,
+    "defaultSection": "right",
+    "defaults": {
+      "temperatureUnit": "Celsius",
+      "refreshSeconds": 1,
+      "historySeconds": 240,
+      "publicIp": false,
+      "showProcesses": true,
+      "runner": "cat"
+    },
+    "schema": [
+      {
+        "key": "runner",
+        "type": "enum",
+        "label": "Runner",
+        "description": "Which animal runs in the bar.",
+        "options": [
+          "cat",
+          "catalpha",
+          "dog",
+          "dancer",
+          "sway"
+        ],
+        "defaultValue": "cat"
+      },
+      {
+        "key": "temperatureUnit",
+        "type": "enum",
+        "label": "Temperature unit",
+        "options": [
+          "Celsius",
+          "Fahrenheit"
+        ],
+        "defaultValue": "Celsius"
+      },
+      {
+        "key": "refreshSeconds",
+        "type": "enum",
+        "label": "Refresh every (seconds)",
+        "defaultValue": "1",
+        "options": [
+          "0.1",
+          "0.2",
+          "0.5",
+          "1",
+          "2",
+          "5",
+          "10"
+        ]
+      },
+      {
+        "key": "historySeconds",
+        "type": "integer",
+        "label": "History (seconds)",
+        "description": "How far back the graphs reach.",
+        "min": 30,
+        "max": 3600,
+        "step": 30,
+        "defaultValue": 240
+      },
+      {
+        "key": "publicIp",
+        "type": "boolean",
+        "label": "Look up public IP",
+        "description": "Ask api.ipify.org for your public address while the Network page is open. Off by default: it is an outbound request that reveals this machine's address to a third party.",
+        "defaultValue": false
+      },
+      {
+        "key": "showProcesses",
+        "type": "boolean",
+        "label": "Top processes",
+        "description": "List the busiest processes on every page.",
+        "defaultValue": true
+      }
+    ]
+  }
+}
