@@ -10,39 +10,45 @@ import "ui" as UI
 // the single OmaStatsService for data and opens its own popup panel.
 Panel {
   id: root
-  moduleName: "crmne.omastats"
+  moduleName: "io.github.andyweiboan.omarcat"
   ipcTarget: ""
 
-  readonly property var service: bar && bar.shell ? bar.shell.serviceFor("crmne.omastats") : null
+  readonly property var service: bar && bar.shell ? bar.shell.serviceFor("io.github.andyweiboan.omarcat") : null
   readonly property bool vertical: bar ? bar.vertical : false
   readonly property int barSize: bar ? bar.barSize : Style.bar.sizeHorizontal
-  readonly property int graphWidth: Math.round(Model.clamp(setting("graphWidth", Model.SETTINGS.graphWidth), 16, 120))
   readonly property string temperatureUnit: String(setting("temperatureUnit", "Celsius")).toLowerCase() === "fahrenheit" ? "Fahrenheit" : "Celsius"
   readonly property bool publicIpEnabled: Model.flag(settings, "publicIp")
   readonly property var configuredModules: Model.parseModules(setting("modules", Model.SETTINGS.modules))
   readonly property bool hasGpu: !!(service && service.hasGpu)
   readonly property bool hasBattery: !!(service && service.hasBattery)
-  readonly property var barModules: {
-    var out = []
-    for (var i = 0; i < configuredModules.length; i++) {
-      var id = configuredModules[i]
-      if (id === "battery" && !hasBattery) continue
-      if (id === "gpu" && !hasGpu) continue
-      out.push(id)
-    }
-    return out.length > 0 ? out : ["cpu"]
-  }
+  // The cat IS this plugin's presence in the bar. The upstream project put a
+  // row of configurable CPU/MEM/NET readouts here and kept the cat as one
+  // option among them; omarcat keeps only the cat. That is the whole identity
+  // of the thing -- there are already thousands of bar widgets that draw a
+  // number, and the readout configuration was most of a 559-line settings page
+  // for a feature this fork does not ship.
+  //
+  // Original note, still true of the cat itself: it is an animated
+  // cat that runs faster the busier the CPU is (ui/RunCat.qml, fed from this
+  // widget's own samples). It lives inside this widget rather than as a
+  // separate plugin so there is exactly one bar entry: the panel then anchors
+  // to the cat, and its indicator sits under the cat instead of under a hidden
+  // placeholder widget.
+
   readonly property var moduleTabs: Model.panelTabs(hasBattery, setting("tabs", Model.SETTINGS.tabs))
   readonly property var panelTabs: moduleTabs.concat(["settings"])
   readonly property color fg: Color.popups.text
   readonly property string fontFamily: bar ? bar.fontFamily : Style.font.family
   readonly property string instanceKey: moduleName + ":" + Math.random().toString(36).slice(2, 8)
 
-  readonly property string disksSource: String(setting("disksSource", Model.SETTINGS.disksSource) || "all")
-  readonly property string barSensors: String(setting("barSensors", Model.SETTINGS.barSensors) || "cpu")
-  readonly property string barLabels: String(setting("barLabels", Model.SETTINGS.barLabels)).toLowerCase() === "icon" ? "icon" : "text"
+  readonly property string runner: {
+    var want = String(setting("runner", Model.SETTINGS.runner) || "").trim().toLowerCase()
+    return Model.RUNNERS.indexOf(want) !== -1 ? want : Model.SETTINGS.runner
+  }
 
-  property string currentTab: "cpu"
+  readonly property string disksSource: String(setting("disksSource", Model.SETTINGS.disksSource) || "all")
+
+  property string currentTab: "overview"
   property int tabCursor: -1
 
   // Expanded process list + its search, shared by every page.
@@ -76,7 +82,6 @@ Panel {
     Qt.callLater(function() { if (root.searchField) root.searchField.forceActiveFocus() })
   }
 
-  function styleFor(module) { return Model.moduleStyle(settings, module) }
 
   function showTab(id) {
     var tab = Model.tabFor(id)
@@ -174,7 +179,7 @@ Panel {
     if (registry && where && typeof registry.setBarWidget === "function") {
       var error = registry.setBarWidget(moduleName, key, value, { section: where.section, index: where.index })
       if (!error) return
-      console.warn("crmne.omastats: per-instance setting failed, falling back:", error)
+      console.warn("io.github.andyweiboan.omarcat: per-instance setting failed, falling back:", error)
     }
     if (typeof bar.shell.updateEntryInline === "function") {
       var entry = { id: moduleName }
@@ -188,8 +193,9 @@ Panel {
     for (var key in defaults) persist(key, defaults[key])
   }
 
-  implicitWidth: readouts.implicitWidth + Style.space(2)
-  implicitHeight: vertical ? readouts.implicitHeight : barSize
+  // LOCAL EDIT: in cat mode the cat is the readout, so it sizes the widget.
+  implicitWidth: runcat.implicitWidth
+  implicitHeight: vertical ? runcat.implicitHeight : barSize
 
   onOpenedChanged: {
     if (!service) return
@@ -226,34 +232,28 @@ Panel {
     }
   }
 
-  Grid {
-    id: readouts
+  // The cat itself.
+  UI.RunCat {
+    id: runcat
+    runner: root.runner
     anchors.centerIn: parent
-    columns: root.vertical ? 1 : root.barModules.length
-    rows: root.vertical ? root.barModules.length : 1
-    columnSpacing: 0
-    rowSpacing: 0
-
-    Repeater {
-      model: root.barModules
-
-      delegate: UI.BarReadout {
-        required property var modelData
-        bar: root.bar
-        module: modelData
-        service: root.service
-        mode: root.styleFor(modelData)
-        graphWidth: root.graphWidth
-        temperatureUnit: root.temperatureUnit
-        disksSource: root.disksSource
-        barSensors: root.barSensors
-        labelMode: root.barLabels
-        onActivated: function(id, button) {
-          if (button === Qt.LeftButton) root.toggleModule(id)
-          else if (button === Qt.RightButton && root.bar) root.bar.run("omarchy-launch-or-focus-tui btop")
-          else if (button === Qt.MiddleButton) root.refresh()
-        }
-      }
+    foreground: Color.bar.text
+    cpu: {
+      const snap = root.service ? root.service.snapshot : null
+      return snap && snap.cpu ? (snap.cpu.total || 0) : 0
+    }
+    memory: {
+      const snap = root.service ? root.service.snapshot : null
+      const mem = snap ? snap.mem : null
+      return mem && mem.total > 0 ? (mem.used / mem.total * 100) : 0
+    }
+    onActivated: function(button) {
+      // Overview, not CPU: the cat is not a CPU readout, it is the whole
+      // machine's mood, so clicking it should land on the page that says
+      // what the whole machine is doing.
+      if (button === Qt.LeftButton) root.toggleModule("overview")
+      else if (button === Qt.RightButton && root.bar) root.bar.run("omarchy-launch-or-focus-tui btop")
+      else if (button === Qt.MiddleButton) root.refresh()
     }
   }
 
@@ -266,8 +266,10 @@ Panel {
     focusTarget: keyCatcher
     // Wide enough to name every tab in full; the strip abbreviates only if
     // the screen cannot give it that much.
-    contentWidth: panel.fittedContentWidth(Math.max(Style.space(372),
-      Math.ceil(tabs.spelledWidth) + Style.spacing.popupPadding * 2))
+    // The same width as Omarchy's own panels (audio, bluetooth, power all use
+    // 380). It used to be "however wide the tab strip spells out", which made
+    // every page as wide as the longest row of page names.
+    contentWidth: panel.fittedContentWidth(Style.space(380))
     // Grow with the page; KeyboardPanel caps this at the screen, which is the
     // only point at which the page scrolls.
     contentHeight: panel.fittedContentHeight(
@@ -296,19 +298,17 @@ Panel {
         if (text === "/") root.focusSearch()
       }
 
-      UI.ModuleTabs {
+      UI.PanelHeader {
         id: tabs
         anchors.top: parent.top
         anchors.left: parent.left
         anchors.right: parent.right
-        tabs: root.moduleTabs
-        settingsTab: "settings"
-        current: root.currentTab
-        cursorIndex: root.tabCursor
+        title: root.currentTab === "overview" ? "omarcat" : Model.moduleDef(root.currentTab).label
+        canGoBack: root.currentTab !== "overview"
         foreground: root.fg
         fontFamily: root.fontFamily
-        onActivated: function(id) { root.showTab(id) }
-        onHovered: function(index, isHovered) { root.tabCursor = isHovered ? index : (root.tabCursor === index ? -1 : root.tabCursor) }
+        onBackRequested: root.showTab("overview")
+        onSettingsRequested: root.showTab(root.currentTab === "settings" ? "overview" : "settings")
       }
 
       Text {
@@ -318,7 +318,7 @@ Panel {
         anchors.right: parent.right
         textFormat: Text.PlainText
         readonly property string message: {
-          if (!root.service) return "The OmaStats service is not loaded — re-enable the plugin."
+          if (!root.service) return "The Omarcat service is not loaded — re-enable the plugin."
           if (!root.service.ready) return "Starting the sampler…"
           return root.service.samplerError ? "Sampler: " + root.service.samplerError : ""
         }

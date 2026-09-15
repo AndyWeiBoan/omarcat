@@ -20,6 +20,11 @@ Item {
   property string unitText: ""
   property string labelText: ""
   property string subText: ""
+  // Optional second reading, set beside the main figure rather than under
+  // it. For a gauge whose arc shows one quantity but whose subject has a
+  // companion measurement worth the same glance -- load and temperature,
+  // say. Drawn at the unit size, so adding one does not shrink the figure.
+  property string trailingText: ""
   property real valueSize: Style.font.display
   property real gapPx: 2
   property real animatedValue: Math.max(0, Math.min(1, value))
@@ -110,18 +115,40 @@ Item {
 
     Item {
       width: parent.width
-      height: figure.implicitHeight
+      height: figureRow.implicitHeight
 
-      Measure {
-        id: figure
+      // A Row so the figure and its companion centre as one group; with the
+      // Measure centred on its own, a trailing reading would push the figure
+      // off-centre instead of sitting beside it.
+      Row {
+        id: figureRow
         anchors.horizontalCenter: parent.horizontalCenter
-        value: root.valueText
-        unit: root.unitText
-        foreground: root.foreground
-        fontFamily: root.fontFamily
-        valueSize: root.valueSize
-        unitSize: Style.font.bodySmall
-        bold: true
+        spacing: root.trailingText !== "" ? Style.space(8) : 0
+
+        Measure {
+          id: figure
+          value: root.valueText
+          unit: root.unitText
+          foreground: root.foreground
+          fontFamily: root.fontFamily
+          valueSize: root.valueSize
+          unitSize: Style.font.bodySmall
+          bold: true
+        }
+
+        Text {
+          textFormat: Text.PlainText
+          visible: root.trailingText !== ""
+          // Bottom, not baseline: Measure is a plain Item, whose baseline anchor
+          // line sits at its top rather than on the digits. Figures have no
+          // descenders, so aligning bottoms lands on the baseline anyway.
+          anchors.bottom: figure.bottom
+          text: root.trailingText
+          color: root.foreground
+          opacity: 0.6
+          font.family: root.fontFamily
+          font.pixelSize: Style.font.bodySmall
+        }
       }
     }
 

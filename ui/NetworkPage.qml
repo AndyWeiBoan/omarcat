@@ -22,6 +22,8 @@ Column {
   readonly property var hist: service ? service.history : Model.emptyHistory()
   readonly property color s1: service ? service.series1 : Color.accent
   readonly property color s2: service ? service.series2 : Color.accent
+  readonly property color warn: service ? service.warn : Color.urgent
+  readonly property color danger: service ? service.danger : Color.urgent
 
   readonly property var net: snap.net || ({})
   readonly property var connections: Array.isArray(net.procs) ? net.procs : []
@@ -46,6 +48,79 @@ Column {
     for (var i = 0; i < v4.length; i++) out.push(v4[i])
     for (var j = 0; j < Math.min(2, v6.length); j++) out.push(v6[j])
     return out
+  }
+
+  // Wi-Fi signal, as dBm and as a share of a usable range.
+  //
+  // Unlike fan RPM this one HAS a meaningful scale, which is why it gets a bar:
+  // about -30 dBm is as good as it gets, -67 is the usual floor for streaming,
+  // and below -80 the link is not worth having. Mapping -90..-30 onto 0..100
+  // makes the bar mean "how much usable signal is left".
+  readonly property real signalDbm: root.primary && root.primary.wireless
+      && root.primary.dbm !== null && root.primary.dbm !== undefined
+      && isFinite(Number(root.primary.dbm))
+    ? Number(root.primary.dbm) : NaN
+  readonly property bool hasSignal: isFinite(root.signalDbm)
+  readonly property real signalPercent:
+      Math.max(0, Math.min(100, (root.signalDbm + 90) / 60 * 100))
+
+  readonly property string signalQuality: {
+    if (!root.hasSignal) return "";
+    if (root.signalDbm >= -50) return "excellent";
+    if (root.signalDbm >= -60) return "good";
+    if (root.signalDbm >= -67) return "fair";
+    if (root.signalDbm >= -80) return "weak";
+    return "unusable";
+  }
+
+  // Band, channel and link rate on one line. A bare "72 Mbps" says nothing --
+  // paired with "2.4 GHz" it says the radio is on the slow band, which is the
+  // most actionable thing this page can tell anyone.
+  readonly property string radioDetail: {
+    if (!root.primary || !root.primary.wireless)
+      return "";
+    const parts = [];
+    const freq = Number(root.primary.freq);
+    if (isFinite(freq) && freq > 0) {
+      parts.push(freq >= 5900 ? "6 GHz" : freq >= 4900 ? "5 GHz" : "2.4 GHz");
+      const channel = root.channelOf(freq);
+      if (channel > 0)
+        parts.push("ch " + channel);
+    }
+    const rate = Number(root.primary.bitrate);
+    if (isFinite(rate) && rate > 0)
+      parts.push(Math.round(rate) + " Mbps");
+    return parts.join("  ·  ");
+  }
+
+  // Standard channel numbering, so the figure matches what a router's settings
+  // page calls it.
+  function channelOf(mhz) {
+    if (mhz >= 2412 && mhz <= 2484)
+      return mhz === 2484 ? 14 : Math.round((mhz - 2407) / 5);
+    if (mhz >= 5000 && mhz < 5900)
+      return Math.round((mhz - 5000) / 5);
+    if (mhz >= 5900)
+      return Math.round((mhz - 5950) / 5);
+    return 0;
+  }
+
+  readonly property real wifiTemp: {
+    const temps = (snap.sensors && snap.sensors.temps) || [];
+    for (let i = 0; i < temps.length; i++)
+      if (String(temps[i].chip || "") === "Wi-Fi")
+        return Model.num(temps[i].value, -1);
+    return -1;
+  }
+
+  // Interfaces that are not the one carrying traffic: listed, but as one quiet
+  // line each rather than a card apiece.
+  readonly property var otherIfaces: {
+    const out = [];
+    for (let i = 0; i < root.ifaces.length; i++)
+      if (root.ifaces[i] !== root.primary)
+        out.push(root.ifaces[i]);
+    return out;
   }
 
   function copy(text) {
@@ -74,6 +149,13 @@ Column {
 
   Card {
     foreground: root.foreground
+
+    CardHeader {
+      title: root.primary ? String(root.primary.name || "Network") : "Network"
+      detail: root.wifiTemp >= 0 ? Model.tempText(root.wifiTemp, root.temperatureUnit) : ""
+      foreground: root.foreground
+      fontFamily: root.fontFamily
+    }
 
     Row {
       width: parent.width
@@ -119,145 +201,157 @@ Column {
     }
   }
 
+  // Signal, with a bar -- this reading has a real scale, unlike fan RPM.
   Card {
-    visible: root.flag("showInterfaces") || root.flag("showTotals")
+    visible: root.hasSignal
     foreground: root.foreground
-    spacing: Style.space(4)
+    spacing: Style.space(6)
 
-    Text {
-      textFormat: Text.PlainText
-      visible: root.flag("showInterfaces") && root.shownIfaces.length === 0
-      text: "No network interfaces"
-      color: root.foreground
-      opacity: 0.5
-      font.family: root.fontFamily
-      font.pixelSize: Style.font.bodySmall
-    }
+    Item {
+      width: parent.width
+      implicitHeight: Math.max(signalTitle.implicitHeight, signalValue.implicitHeight)
 
-    Repeater {
-      model: root.flag("showInterfaces") ? root.shownIfaces.length : 0
+      Text {
+        id: signalTitle
+        textFormat: Text.PlainText
+        anchors.left: parent.left
+        anchors.baseline: signalValue.baseline
+        text: "Signal"
+        color: Color.accent
+        font.family: root.fontFamily
+        font.pixelSize: Style.font.subtitle
+        font.bold: true
+      }
 
-      delegate: Item {
-        id: row
-        required property int index
-        readonly property var modelData: root.shownIfaces[index] || ({})
-        readonly property string status: modelData.up
-          ? (Model.linkSpeedText(modelData) || "Connected")
-          : "Disconnected"
-        readonly property string name: modelData.wireless && modelData.ssid
-          ? modelData.ssid
-          : modelData.name
-
-        width: parent.width
-        height: Style.space(26)
-        opacity: modelData.up ? 1 : 0.5
-
-        Text {
-          id: icon
-          textFormat: Text.PlainText
-          anchors.left: parent.left
-          anchors.verticalCenter: parent.verticalCenter
-          text: Model.ifaceIcon(row.modelData)
-          color: root.foreground
-          font.family: root.fontFamily
-          font.pixelSize: Style.font.icon
-        }
-
-        Text {
-          anchors.left: icon.right
-          anchors.leftMargin: Style.space(10)
-          anchors.right: state.left
-          anchors.rightMargin: Style.space(8)
-          anchors.verticalCenter: parent.verticalCenter
-          textFormat: Text.PlainText
-          text: row.name + (row.modelData.wireless && row.modelData.ssid ? "  " + row.modelData.name : "")
-          color: root.foreground
-          font.family: root.fontFamily
-          font.pixelSize: Style.font.body
-          font.bold: row.modelData.default === true
-          elide: Text.ElideRight
-        }
-
-        Text {
-          id: state
-          textFormat: Text.PlainText
-          anchors.right: parent.right
-          anchors.verticalCenter: parent.verticalCenter
-          text: row.status + (row.modelData.wireless && isFinite(Number(row.modelData.dbm)) ? " · " + row.modelData.dbm + " dBm" : "")
-          color: root.foreground
-          opacity: 0.6
-          font.family: root.fontFamily
-          font.pixelSize: Style.font.bodySmall
-        }
+      Text {
+        id: signalValue
+        textFormat: Text.PlainText
+        anchors.right: parent.right
+        anchors.top: parent.top
+        text: Math.round(root.signalDbm) + " dBm"
+        color: root.foreground
+        font.family: root.fontFamily
+        font.pixelSize: Style.font.display
+        font.bold: true
       }
     }
 
-    PanelSeparator {
-      visible: !!root.primary && root.flag("showInterfaces") && root.flag("showTotals")
+    LevelBar {
+      width: parent.width
+      value: root.signalPercent
+      // Inverted: here a LOW reading is the bad one. The thresholds are the
+      // familiar ones -- below -67 dBm streaming starts to suffer, below -80
+      // the link is not worth having.
+      inverted: true
+      warnAt: (-67 + 90) / 60 * 100
+      dangerAt: (-80 + 90) / 60 * 100
       foreground: root.foreground
-    }
-
-    StatRow {
-      visible: !!root.primary && root.flag("showTotals")
-      label: "Received"
-      detail: "since boot"
-      value: root.primary ? Model.bytesParts(root.primary.rxTotal).value : ""
-      unit: root.primary ? Model.bytesParts(root.primary.rxTotal).unit : ""
-      boldValue: false
-      foreground: root.foreground
-      fontFamily: root.fontFamily
-    }
-
-    StatRow {
-      visible: !!root.primary && root.flag("showTotals")
-      label: "Sent"
-      detail: "since boot"
-      value: root.primary ? Model.bytesParts(root.primary.txTotal).value : ""
-      unit: root.primary ? Model.bytesParts(root.primary.txTotal).unit : ""
-      boldValue: false
-      foreground: root.foreground
-      fontFamily: root.fontFamily
-    }
-  }
-
-  Card {
-    visible: root.publicIpEnabled
-    foreground: root.foreground
-    spacing: Style.space(4)
-
-    SectionTitle { text: "Public IP address"; fontFamily: root.fontFamily }
-
-    AddressRow {
-      value: root.net.publicIp || ""
-      placeholder: root.net.online === false ? "Offline" : "Looking up…"
-    }
-  }
-
-  Card {
-    visible: root.flag("showAddresses")
-    foreground: root.foreground
-    spacing: Style.space(4)
-
-    SectionTitle {
-      text: "IP addresses" + (root.primary ? " · " + root.primary.name : "")
-      fontFamily: root.fontFamily
+      normalColor: root.s1
+      warnColor: root.warn
+      dangerColor: root.danger
     }
 
     Text {
       textFormat: Text.PlainText
-      visible: root.addresses.length === 0
-      text: "No address assigned"
+      width: parent.width
+      text: root.radioDetail
+          + (root.signalQuality ? "  ·  " + root.signalQuality : "")
       color: root.foreground
-      opacity: 0.5
+      opacity: 0.6
       font.family: root.fontFamily
-      font.pixelSize: Style.font.bodySmall
+      font.pixelSize: Style.font.caption
+      elide: Text.ElideRight
     }
+  }
+
+  // Addresses. Click to copy -- the reason anybody opens this page.
+  Card {
+    visible: root.addresses.length > 0
+    foreground: root.foreground
+    spacing: Style.space(2)
+
+    SectionTitle { text: "Addresses"; fontFamily: root.fontFamily }
 
     Repeater {
-      model: root.addresses.length
-      delegate: AddressRow {
-        required property int index
-        value: String(root.addresses[index] || "")
+      model: root.addresses
+
+      delegate: StatRow {
+        required property var modelData
+        width: parent.width
+        label: String(modelData).indexOf(":") >= 0 ? "IPv6" : "IPv4"
+        value: root.copiedValue === String(modelData) ? "copied" : String(modelData)
+        foreground: root.foreground
+        fontFamily: root.fontFamily
+
+        TapHandler { onTapped: root.copy(String(modelData)) }
+      }
+    }
+
+    // Public IP is an outbound request to a third party (api.ipify.org), so it
+    // is off unless asked for -- see the note on the setting's default.
+    StatRow {
+      visible: root.publicIpEnabled
+      width: parent.width
+      label: "Public"
+      value: root.net.publicIp
+        ? (root.copiedValue === String(root.net.publicIp) ? "copied" : String(root.net.publicIp))
+        : "looking up…"
+      foreground: root.foreground
+      fontFamily: root.fontFamily
+
+      TapHandler { onTapped: root.copy(String(root.net.publicIp || "")) }
+    }
+  }
+
+  // Counted from boot, which is what makes it useful on a metered connection:
+  // the rate tells you nothing about how much of an allowance is gone.
+  Card {
+    visible: !!root.primary
+    foreground: root.foreground
+    spacing: Style.space(2)
+
+    SectionTitle { text: "Since boot"; fontFamily: root.fontFamily }
+
+    StatRow {
+      width: parent.width
+      label: "Downloaded"
+      dot: root.s1
+      value: Model.bytesText(Model.num(root.primary ? root.primary.rxTotal : 0))
+      foreground: root.foreground
+      fontFamily: root.fontFamily
+    }
+
+    StatRow {
+      width: parent.width
+      label: "Uploaded"
+      dot: root.s2
+      value: Model.bytesText(Model.num(root.primary ? root.primary.txTotal : 0))
+      foreground: root.foreground
+      fontFamily: root.fontFamily
+    }
+  }
+
+  // Everything else the machine has, one quiet line each. A down USB adapter
+  // does not deserve the same billing as the link carrying your traffic.
+  Card {
+    visible: root.otherIfaces.length > 0
+    foreground: root.foreground
+    spacing: Style.space(2)
+
+    SectionTitle { text: "Other interfaces"; fontFamily: root.fontFamily }
+
+    Repeater {
+      model: root.otherIfaces
+
+      delegate: StatRow {
+        required property var modelData
+        width: parent.width
+        label: String(modelData.name || "")
+        value: modelData.up ? "up" : "down"
+        labelOpacity: 0.55
+        boldValue: false
+        foreground: root.foreground
+        fontFamily: root.fontFamily
       }
     }
   }

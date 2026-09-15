@@ -1,11 +1,11 @@
 {
   "schemaVersion": 1,
-  "id": "crmne.omastats",
-  "name": "OmaStats",
-  "version": "1.0.0",
-  "author": "Carmine Paolino",
+  "id": "io.github.andyweiboan.omarcat",
+  "name": "Omarcat",
+  "version": "0.1.0",
+  "author": "Andy Wei",
   "license": "MIT",
-  "description": "System monitor for the Omarchy bar: CPU, GPU, memory, disk, network, temperature, fan and battery stats with live graphs and a detailed panel. An iStat Menus-style activity monitor showing the machine's vital signs, configurable from inside the panel.",
+  "description": "System monitor for the Omarchy bar with a cat that runs faster the busier the CPU is: an overview of CPU, memory, disk, battery and network at a glance, plus per-subsystem pages with live graphs.",
   "kinds": [
     "service",
     "bar-widget"
@@ -16,106 +16,44 @@
     "barWidget": "OmaStatsWidget.qml"
   },
   "barWidget": {
-    "displayName": "OmaStats",
-    "description": "System monitor readouts with live mini graphs: CPU, GPU, memory, disk, network, temperature, fans and battery, each opening an iStat Menus-style panel with history graphs, ring gauges, sensors and top processes.",
+    "displayName": "Omarcat",
+    "description": "A cat in the bar that runs faster the busier the CPU is, and an iStat Menus-style panel behind it: an overview of the whole machine at a glance, plus pages for the processor, memory, disks and network.",
     "category": "System",
     "aliases": [
-      "omastats",
+      "omarcat",
+      "cat",
+      "runcat",
       "stats",
       "system-monitor",
       "activity-monitor",
       "sysmon",
       "monitor",
-      "cpu",
-      "gpu",
-      "memory",
-      "disk",
-      "network",
-      "sensors",
-      "temperature",
-      "fans",
-      "battery",
       "istat"
     ],
     "allowMultiple": true,
     "defaultSection": "right",
     "defaults": {
-      "modules": "cpu,memory,network",
-      "style": "both",
-      "graphWidth": 36,
       "temperatureUnit": "Celsius",
       "refreshSeconds": 1,
       "historySeconds": 240,
-      "publicIp": true,
-      "tabs": "cpu,memory,disks,network,sensors,battery",
+      "publicIp": false,
       "showProcesses": true,
-      "disksSource": "all",
-      "barSensors": "cpu",
-      "barLabels": "text"
+      "runner": "cat"
     },
     "schema": [
       {
-        "key": "modules",
-        "type": "string",
-        "label": "Bar modules",
-        "description": "Comma-separated, in order: cpu, gpu, memory, disks, network, sensors, battery. Battery and GPU only appear when present.",
-        "defaultValue": "cpu,memory,network"
-      },
-      {
-        "key": "tabs",
-        "type": "string",
-        "label": "Panel tabs",
-        "description": "Comma-separated tabs shown in the panel: cpu, memory, disks, network, sensors, battery.",
-        "defaultValue": "cpu,memory,disks,network,sensors,battery"
-      },
-      {
-        "key": "style",
+        "key": "runner",
         "type": "enum",
-        "label": "Bar style",
-        "description": "Default look of each bar readout: graph, ring, figure (text), graph and figure (both), or ring and figure. The Settings page can override it per module.",
+        "label": "Runner",
+        "description": "Which animal runs in the bar.",
         "options": [
-          "both",
-          "graph",
-          "ring",
-          "text",
-          "ring-text"
+          "cat",
+          "catalpha",
+          "dog",
+          "dancer",
+          "sway"
         ],
-        "defaultValue": "both"
-      },
-      {
-        "key": "barLabels",
-        "type": "enum",
-        "label": "Bar labels",
-        "description": "Stacked letters (CPU, MEM, NET) like iStat Menus, or glyphs.",
-        "options": [
-          "text",
-          "icon"
-        ],
-        "defaultValue": "text"
-      },
-      {
-        "key": "disksSource",
-        "type": "string",
-        "label": "Disk readout source",
-        "description": "\"all\" or a block device such as nvme0n1.",
-        "defaultValue": "all"
-      },
-      {
-        "key": "barSensors",
-        "type": "string",
-        "label": "Sensor readouts",
-        "description": "Comma-separated: cpu, gpu, or hwmon ids like nct6687/fan1 (pick them on the Settings page).",
-        "defaultValue": "cpu"
-      },
-      {
-        "key": "graphWidth",
-        "type": "integer",
-        "label": "Bar graph width",
-        "description": "Width of each mini graph in the bar, in pixels.",
-        "min": 16,
-        "max": 120,
-        "step": 2,
-        "defaultValue": 36
+        "defaultValue": "cat"
       },
       {
         "key": "temperatureUnit",
@@ -156,8 +94,8 @@
         "key": "publicIp",
         "type": "boolean",
         "label": "Look up public IP",
-        "description": "Ask api.ipify.org for your public address while the Network page is open.",
-        "defaultValue": true
+        "description": "Ask api.ipify.org for your public address while the Network page is open. Off by default: it is an outbound request that reveals this machine's address to a third party.",
+        "defaultValue": false
       },
       {
         "key": "showProcesses",

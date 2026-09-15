@@ -190,9 +190,9 @@ Item {
     }
     var shell = live[0].bar ? live[0].bar.shell : null
     if (!shell) return "no-shell"
-    if (mode === "hide") shell.hide("crmne.omastats")
-    else if (mode === "toggle") shell.toggle("crmne.omastats", "{}")
-    else shell.summon("crmne.omastats", "{}")
+    if (mode === "hide") shell.hide("io.github.andyweiboan.omarcat")
+    else if (mode === "toggle") shell.toggle("io.github.andyweiboan.omarcat", "{}")
+    else shell.summon("io.github.andyweiboan.omarcat", "{}")
     return "ok"
   }
 
@@ -285,7 +285,7 @@ Item {
   }
 
   IpcHandler {
-    target: "crmne.omastats"
+    target: "omarcat"
 
     function status(): string { return JSON.stringify(root.summary()) }
     function refresh(): string { root.requestPublicIp(true); return "ok" }

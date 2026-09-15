@@ -27,7 +27,6 @@ Column {
   readonly property var mem: snap.mem || ({})
   readonly property var procs: snap.procs || null
   readonly property real total: Math.max(1, Model.num(mem.total, 1))
-  readonly property real usedPercent: Model.num(mem.used) / total * 100
   readonly property real pressure: Math.max(Model.num(mem.pressureSome), Model.num(mem.pressureFull))
   readonly property bool hasCompression: Model.num(mem.compressed) >= 1048576
   readonly property bool hasSwap: Model.num(mem.swapTotal) > 0
@@ -35,142 +34,174 @@ Column {
   readonly property real swapUsed: Model.num(mem.swapUsed)
   readonly property real cached: Model.num(mem.cached)
 
-  // The ring beside "Memory": swap, with the zram compression ratio as its
-  // caption once something is actually compressed.
-  readonly property var gaugeSpec: {
-    if (swapTotal <= 0) {
-      return { value: 0, color: s1, text: "Off", unit: "", label: "Swap", sub: "" }
-    }
-    var frac = swapUsed / swapTotal
-    // Just the figure: the ring is small, and "used" is implied by the arc.
-    var sub = Model.bytesText(swapUsed > 0 ? swapUsed : swapTotal)
-    return {
-      value: frac,
-      color: frac >= 0.85 ? danger : (frac >= 0.5 ? warn : s1),
-      text: String(Math.round(frac * 100)), unit: "%", label: "Swap", sub: sub
-    }
+  // Linux's `used` excludes reclaimable cache, so it reads far lower than the
+  // memory actually spoken for and invites "plenty left" on a machine that has
+  // none. `available` is the kernel's own estimate of what a new allocation
+  // could get, so this is the honest headline.
+  readonly property real committedPercent: (total - Model.num(root.mem.available)) / total * 100
+
+  readonly property var breakdown: {
+    const out = [
+      { label: "Apps",   color: root.s1, bytes: Model.num(root.mem.apps) },
+      { label: "Cached", color: root.s2, bytes: Model.num(root.mem.cached) },
+      { label: "Shared", color: root.s3, bytes: Model.num(root.mem.shared) },
+      { label: "Free",   color: root.track, bytes: Model.num(root.mem.free) }
+    ];
+    // zram reports a few kilobytes even when nothing is compressed; showing
+    // "4 KB" implies a feature is doing work when it is idle.
+    if (root.hasCompression)
+      out.splice(3, 0, { label: "Compressed", color: root.warn, bytes: Model.num(root.mem.compressed) });
+    for (let i = 0; i < out.length; i++)
+      out[i].text = Model.bytesText(out[i].bytes);
+    // Pressure only when there IS pressure. It reads 0 almost always, and a
+    // permanent zero teaches people to ignore the one number on this page that
+    // actually says whether memory is hurting them.
+    if (root.pressure >= 0.5)
+      out.push({ label: "Pressure", color: root.danger, bytes: 0,
+                 text: Math.round(root.pressure) + "%" });
+    return out;
   }
 
-  function part(bytes) { return Model.bytesParts(bytes) }
 
   width: parent ? parent.width : implicitWidth
   spacing: Style.space(10)
 
+  // One card: how much is spoken for, what it is spoken for by, and how that
+  // has moved. The composition bar doubles as the progress bar -- a plain
+  // single-colour bar above a three-colour one said the same thing twice.
   Card {
     foreground: root.foreground
+    spacing: Style.space(10)
 
     Item {
       width: parent.width
-      height: rings.implicitHeight
+      implicitHeight: Math.max(memTitle.implicitHeight, memValue.implicitHeight)
 
-      Row {
-        id: rings
-        anchors.horizontalCenter: parent.horizontalCenter
-        spacing: Style.space(30)
+      Text {
+        id: memTitle
+        textFormat: Text.PlainText
+        anchors.left: parent.left
+        anchors.baseline: memValue.baseline
+        text: "Memory"
+        color: Color.accent
+        font.family: root.fontFamily
+        font.pixelSize: Style.font.subtitle
+        font.bold: true
+      }
 
-        RingGauge {
-          value: root.gaugeSpec.value
-          color: root.gaugeSpec.color
-          foreground: root.foreground
-          fontFamily: root.fontFamily
-          valueText: root.gaugeSpec.text
-          unitText: root.gaugeSpec.unit
-          labelText: root.gaugeSpec.label
-          subText: root.gaugeSpec.sub
-          valueSize: root.gaugeSpec.unit === "" ? Style.font.title : Style.font.display
-          size: Style.space(86)
-        }
+      Text {
+        id: memValue
+        textFormat: Text.PlainText
+        anchors.right: parent.right
+        anchors.top: parent.top
+        // Linux's `used` excludes reclaimable cache, so it reads far lower than
+        // the memory actually spoken for. `available` is the kernel's own
+        // estimate of what a new allocation could get -- the honest headline.
+        text: Model.percentText(root.committedPercent)
+        color: root.foreground
+        font.family: root.fontFamily
+        font.pixelSize: Style.font.display
+        font.bold: true
+      }
+    }
 
-        RingGauge {
-          foreground: root.foreground
-          fontFamily: root.fontFamily
-          segments: [
-            { value: Model.num(root.mem.apps) / root.total, color: root.s1 },
-            { value: Model.num(root.mem.shared) / root.total, color: root.s3 },
-            { value: Model.num(root.mem.cached) / root.total, color: root.s2 }
-          ]
-          valueText: String(Math.round(root.usedPercent))
-          unitText: "%"
-          labelText: "Memory"
-          subText: root.pressure >= 0.5 ? "pressure " + Math.round(root.pressure) + "%" : ""
-          size: Style.space(86)
+    // The parts and the whole. These sum to `total` exactly -- verified against
+    // the sampler, to the byte -- which is why this is one stacked bar rather
+    // than several independent ones: separate bars would hide that they are
+    // dividing up one fixed amount.
+    StackBar {
+      width: parent.width
+      foreground: root.foreground
+      segments: [
+        { value: Model.num(root.mem.apps) / root.total, color: root.s1 },
+        { value: Model.num(root.mem.cached) / root.total, color: root.s2 },
+        { value: Model.num(root.mem.shared) / root.total, color: root.s3 }
+      ]
+    }
+
+    Flow {
+      width: parent.width
+      spacing: Style.space(14)
+
+      Repeater {
+        model: root.breakdown
+
+        delegate: Row {
+          required property var modelData
+          spacing: Style.space(5)
+
+          Rectangle {
+            width: Style.space(7)
+            height: width
+            radius: width / 2
+            anchors.verticalCenter: parent.verticalCenter
+            color: modelData.color
+          }
+
+          Text {
+            textFormat: Text.PlainText
+            anchors.verticalCenter: parent.verticalCenter
+            text: modelData.label
+            color: root.foreground
+            opacity: 0.6
+            font.family: root.fontFamily
+            font.pixelSize: Style.font.caption
+          }
+
+          Text {
+            textFormat: Text.PlainText
+            anchors.verticalCenter: parent.verticalCenter
+            text: modelData.text
+            color: root.foreground
+            font.family: root.fontFamily
+            font.pixelSize: Style.font.caption
+          }
         }
       }
     }
+
+    HistoryGraph {
+      width: parent.width
+      height: Style.space(64)
+      // One series, not an apps/cache split: the history records a single
+      // memory figure (OmaStatsService.qml), and it is already a PERCENTAGE --
+      // feeding this a byte-sized ceiling flattens the line to nothing.
+      series: [root.hist.memUsed || []]
+      colors: [root.s1]
+      ceiling: 100
+      baselineColor: Util.alpha(root.foreground, 0.14)
+    }
   }
 
+  // Swap is its own card, not a row in the breakdown: it is a different
+  // resource with a different total, and stacking it with RAM would imply the
+  // two add up. Hidden entirely on a machine with no swap configured.
   Card {
-    visible: root.flag("showBreakdown")
+    visible: root.hasSwap
     foreground: root.foreground
-    spacing: Style.space(2)
+    spacing: Style.space(6)
 
-    StatRow {
-      label: "Apps"
-      dot: root.s1
-      value: root.part(root.mem.apps).value
-      unit: root.part(root.mem.apps).unit
+    CardHeader {
+      title: "Swap"
+      detail: Model.pairText(Model.num(root.mem.swapUsed), Model.num(root.mem.swapTotal))
       foreground: root.foreground
       fontFamily: root.fontFamily
     }
 
-    StatRow {
-      label: "Cached"
-      dot: root.s2
-      value: root.part(root.mem.cached).value
-      unit: root.part(root.mem.cached).unit
+    LevelBar {
+      width: parent.width
+      // Any swap in use on a machine with free RAM is worth noticing, so the
+      // thresholds sit low -- this is not a capacity to fill, it is a fallback
+      // you would rather not be touching.
+      value: Model.num(root.mem.swapTotal) > 0
+        ? Model.num(root.mem.swapUsed) / Model.num(root.mem.swapTotal) * 100
+        : 0
+      warnAt: 10
+      dangerAt: 50
       foreground: root.foreground
-      fontFamily: root.fontFamily
-    }
-
-    StatRow {
-      label: "Shared"
-      dot: root.s3
-      value: root.part(root.mem.shared).value
-      unit: root.part(root.mem.shared).unit
-      foreground: root.foreground
-      fontFamily: root.fontFamily
-    }
-
-    StatRow {
-      visible: root.hasCompression
-      label: "Compressed"
-      dot: root.warn
-      value: root.part(root.mem.compressed).value
-      unit: root.part(root.mem.compressed).unit
-      foreground: root.foreground
-      fontFamily: root.fontFamily
-    }
-
-    StatRow {
-      label: "Free"
-      dot: root.track
-      value: root.part(root.mem.free).value
-      unit: root.part(root.mem.free).unit
-      foreground: root.foreground
-      fontFamily: root.fontFamily
-    }
-
-    StatRow {
-      visible: root.hasSwap
-      label: "Swap"
-      detail: "of " + Model.bytesText(root.mem.swapTotal)
-      dot: Model.num(root.mem.swapUsed) > 0 ? root.danger : "transparent"
-      showDot: true
-      value: root.part(root.mem.swapUsed).value
-      unit: root.part(root.mem.swapUsed).unit
-      foreground: root.foreground
-      fontFamily: root.fontFamily
-    }
-
-    StatRow {
-      label: "Total"
-      showDot: true
-      value: root.part(root.mem.total).value
-      unit: root.part(root.mem.total).unit
-      labelOpacity: 0.55
-      boldValue: false
-      foreground: root.foreground
-      fontFamily: root.fontFamily
+      normalColor: root.s1
+      warnColor: root.warn
+      dangerColor: root.danger
     }
   }
 

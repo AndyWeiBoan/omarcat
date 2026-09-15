@@ -28,11 +28,73 @@ Column {
   readonly property var efficiency: Array.isArray(cpu.efficiency) ? cpu.efficiency : []
   readonly property bool hybrid: efficiency.length > 0 && efficiency.length < cores.length
 
+  readonly property color warn: service ? service.warn : Color.urgent
+  readonly property color danger: service ? service.danger : Color.urgent
+
+  // `Number(null)` is 0 and `isFinite(0)` is true, so the obvious
+  // `isFinite(Number(v))` test lets a null through and prints it as a reading.
+  // That is how the GPU card came to show "0%" on a machine that reports no
+  // utilisation at all. Null and zero are different answers; only one of them
+  // is a measurement.
+  function hasNumber(value) {
+    return value !== null && value !== undefined && isFinite(Number(value));
+  }
+
+  // An Intel integrated GPU reports its name and its clock and nothing else --
+  // utilisation lives behind i915 perf, which needs privileges the shell does
+  // not have. A card holding one clock and four dashes is worse than no card,
+  // so it appears only when the hardware actually answers.
+  readonly property bool gpuHasReadings: !!root.gpu && (
+       root.hasNumber(root.gpu.util)
+    || root.hasNumber(root.gpu.temp)
+    || root.hasNumber(root.gpu.power)
+    || Model.num(root.gpu.memTotal) > 0)
+
+  // The package sensor drives the ring: it is the die as a whole, which is what
+  // throttles, rather than whichever core happens to be hottest this instant.
+  // `cpu.temp` is the sampler's own pick and the fallback when the chip exposes
+  // no labelled package sensor.
+  readonly property var packageSensor: {
+    const temps = (snap.sensors && snap.sensors.temps) || [];
+    for (let i = 0; i < temps.length; i++)
+      if (/^Package id/.test(String(temps[i].label || "")))
+        return temps[i];
+    return null;
+  }
+  readonly property real packageTemp: {
+    if (packageSensor)
+      return Model.num(packageSensor.value, -1);
+    const t = Number(root.cpu.temp);
+    return isFinite(t) ? t : -1;
+  }
+  readonly property real packageCeiling:
+      packageSensor && Model.num(packageSensor.max) > 0 ? Model.num(packageSensor.max) : 100
+
+  // Per-core temperatures, keyed by physical core id. coretemp labels its
+  // sensors "Core 0".."Core N"; AMD's k10temp usually reports one package
+  // figure and no per-core sensors at all, in which case this stays empty and
+  // the rows quietly drop their temperature bar rather than inventing one.
+  readonly property var coreTemps: {
+    const out = ({});
+    const temps = (snap.sensors && snap.sensors.temps) || [];
+    for (let i = 0; i < temps.length; i++) {
+      const match = /^Core\s+(\d+)$/.exec(String(temps[i].label || ""));
+      if (match)
+        out[parseInt(match[1], 10)] = temps[i];
+    }
+    return out;
+  }
+
+  CpuTopology {
+    id: topology
+    threadCount: Model.num(root.cpu.threadCount, root.cores.length)
+  }
+
   function headerDetail(mhz, temp) {
     var parts = []
     var freq = Model.freqText(mhz)
     if (freq) parts.push(freq)
-    if (isFinite(Number(temp)) && temp !== null) parts.push(Model.tempText(temp, temperatureUnit))
+    if (root.hasNumber(temp)) parts.push(Model.tempText(temp, temperatureUnit))
     return parts.join(", ")
   }
 
@@ -44,124 +106,169 @@ Column {
 
     CardHeader {
       title: "CPU"
-      detail: root.headerDetail(root.cpu.mhz, root.cpu.temp)
+      // Uptime, not frequency or temperature: those two are inside the ring to
+      // the right, and printing them twice on one card was pure repetition.
+      // Uptime belongs up here precisely because it is NOT a live reading --
+      // it was sharing a card with the load average, which invited reading the
+      // two as comparable, and they are not.
+      detail: "up " + Model.uptimeText(root.cpu.uptime)
+      inlineDetail: true
       foreground: root.foreground
       fontFamily: root.fontFamily
     }
 
-    HistoryGraph {
+    // Graph and gauge on one line: the graph is the last few minutes, the ring
+    // is right now. Temperature goes in the ring rather than on the graph
+    // because it moves on a different scale and would need a second axis.
+    Row {
+      id: chartRow
       width: parent.width
-      height: Style.space(64)
-      series: [root.hist.cpuUser || [], root.hist.cpuSystem || []]
-      colors: [root.s1, root.s2]
-      ceiling: 100
-      baselineColor: Util.alpha(root.foreground, 0.14)
+      spacing: Style.space(10)
+
+      // Two thirds history, one third gauge. The ring is square, so its width
+      // also sets the height of the whole band -- which is why the graph is
+      // bound to the same number rather than to a constant.
+      readonly property real gaugeWidth: (width - spacing) / 3
+      readonly property real graphWidth: width - gaugeWidth - spacing
+
+      // Graph and its key in one column, so the left side has a single height
+      // that the ring can centre against. With the legend hanging below the
+      // whole row instead, the taller ring left a band of dead space between
+      // the chart and its own labels.
+      Column {
+        width: chartRow.graphWidth
+        spacing: Style.space(6)
+
+        HistoryGraph {
+          width: parent.width
+          // Leaves room for the two legend rows underneath without the column
+          // overshooting the ring beside it.
+          height: Math.round(gauge.size * 0.62)
+          series: [root.hist.cpuUser || [], root.hist.cpuSystem || []]
+          colors: [root.s1, root.s2]
+          ceiling: 100
+          baselineColor: Util.alpha(root.foreground, 0.14)
+        }
+
+        // The graph's colours, named, with what they read right now. One row
+        // each rather than both on a line: the earlier single-line version left
+        // the second figure stranded against the far edge of the card.
+        StatRow {
+          width: parent.width
+          label: "User"
+          dot: root.s1
+          value: Model.percentText(Model.num(root.cpu.user))
+          foreground: root.foreground
+          fontFamily: root.fontFamily
+        }
+
+        StatRow {
+          width: parent.width
+          label: "System"
+          dot: root.s2
+          value: Model.percentText(Model.num(root.cpu.system))
+          foreground: root.foreground
+          fontFamily: root.fontFamily
+        }
+      }
+
+      // The gauge sits in a slot the full third wide and hugs its right edge.
+      // Without the slot the Row packs the ring straight after the graph and
+      // strands the leftover space on the far right of the band.
+      Item {
+        width: chartRow.gaugeWidth
+        height: gauge.size
+
+        RingGauge {
+          id: gauge
+          anchors.right: parent.right
+          anchors.verticalCenter: parent.verticalCenter
+
+          // The slot is a third of the row, but the ring does not fill it: at
+          // full width the square gauge would set the height of the whole band
+          // and the graph beside it would gain a lot of dead vertical space.
+          // The floor matters because the line under the figure now carries
+          // both the frequency and the temperature -- too small and it elides.
+          size: Math.max(Style.space(86), Math.min(chartRow.gaugeWidth, Style.space(120)))
+
+          // The arc is CPU load, matching the figure inside it. It used to be
+          // temperature, which put an arc and a number on the ring that
+          // measured two different things -- temperature now lives beside the
+          // card title, next to the frequency it explains.
+          //
+          // Thresholds match the Overview page's CPU bar on purpose: the same
+          // reading should not turn yellow on one page and stay blue on another.
+          value: Math.min(1, Math.max(0, Model.num(root.cpu.total) / 100))
+          color: Model.num(root.cpu.total) >= 90 ? root.danger
+               : Model.num(root.cpu.total) >= 70 ? root.warn
+               : root.s1
+
+          foreground: root.foreground
+          fontFamily: root.fontFamily
+          topText: "CPU"
+          valueText: String(Math.round(Model.num(root.cpu.total)))
+          unitText: "%"
+          // Temperature beside the load figure rather than under it: the two
+          // are read together ("busy, and how hot that is making it"), and the
+          // line underneath is left to the frequency alone.
+          trailingText: root.packageTemp >= 0
+            ? Model.tempText(root.packageTemp, root.temperatureUnit)
+            : ""
+          subText: Model.freqText(root.cpu.mhz)
+        }
+      }
     }
 
-    Legend {
-      foreground: root.foreground
-      fontFamily: root.fontFamily
-      items: [
-        { color: root.s1, label: "User", value: Math.round(Model.num(root.cpu.user)), unit: "%" },
-        { color: root.s2, label: "System", value: Math.round(Model.num(root.cpu.system)), unit: "%" }
-      ]
-    }
+    // The graph's colours, named, with what they read right now. Without this
+    // the chart is two anonymous colours -- and the earlier version put both
+    // values on one line, which left the second one stranded against the far
+    // edge of the card. One row each instead, so the figures line up.
   }
 
   Card {
-    visible: root.flag("showCores")
     foreground: root.foreground
     spacing: Style.space(10)
 
-    Flow {
+    // One row per PHYSICAL core, not per thread. A temperature sensor belongs
+    // to a core -- two hyperthreads share one reading -- so a per-thread list
+    // would print the same degrees twice and imply precision the hardware does
+    // not have. Load is averaged across the core's threads; see CpuTopology for
+    // why the thread-to-core mapping is read from sysfs rather than assumed.
+    Column {
       width: parent.width
-      spacing: Style.space(6)
+      spacing: Style.space(8)
 
       Repeater {
-        model: root.cores.length
+        model: topology.ready ? topology.coreIds : []
 
-        delegate: MiniRing {
-          required property int index
-          value: Model.num(root.cores[index]) / 100
-          color: root.efficiency.indexOf(index) >= 0 ? root.s2 : root.s1
+        delegate: CoreRow {
+          required property var modelData
+          width: parent.width
+          title: "Core " + modelData
+          usage: topology.usageOf(modelData, root.cores)
+          temperature: root.coreTemps[modelData] !== undefined
+            ? Model.num(root.coreTemps[modelData].value, -1)
+            : -1
+          temperatureCeiling: root.coreTemps[modelData] !== undefined && Model.num(root.coreTemps[modelData].max) > 0
+            ? Model.num(root.coreTemps[modelData].max)
+            : 100
+          temperatureText: root.coreTemps[modelData] !== undefined
+            ? Model.tempText(Model.num(root.coreTemps[modelData].value), root.temperatureUnit)
+            : ""
           foreground: root.foreground
-          size: Style.space(18)
-          thickness: Style.spaceReal(2.6)
+          normalColor: root.s1
+          warnColor: root.warn
+          dangerColor: root.danger
+          fontFamily: root.fontFamily
         }
       }
     }
 
-    Legend {
-      foreground: root.foreground
-      fontFamily: root.fontFamily
-      items: root.hybrid
-        ? [
-            { color: root.s1, label: "Performance", value: root.cores.length - root.efficiency.length, unit: "" },
-            { color: root.s2, label: "Efficiency", value: root.efficiency.length, unit: "" }
-          ]
-        : [
-            { color: root.s1, label: "Cores", value: Model.num(root.cpu.coreCount), unit: "" },
-            { color: Util.alpha(root.foreground, 0.25), label: "Threads", value: Model.num(root.cpu.threadCount), unit: "" }
-          ]
-    }
 
-    Text {
-      textFormat: Text.PlainText
-      visible: text !== ""
-      width: parent.width
-      text: String(root.cpu.model || "")
-      color: root.foreground
-      opacity: 0.45
-      font.family: root.fontFamily
-      font.pixelSize: Style.font.caption
-      elide: Text.ElideRight
-    }
   }
 
   Card {
-    visible: root.flag("showLoad")
-    foreground: root.foreground
-
-    Row {
-      width: parent.width
-
-      Column {
-        width: parent.width / 2
-        spacing: Style.space(3)
-
-        SectionTitle { text: "Load average"; fontFamily: root.fontFamily }
-
-        Text {
-          textFormat: Text.PlainText
-          text: Model.loadText(root.cpu.load)
-          color: root.foreground
-          font.family: root.fontFamily
-          font.pixelSize: Style.font.body
-          font.bold: true
-        }
-      }
-
-      Column {
-        width: parent.width / 2
-        spacing: Style.space(3)
-
-        SectionTitle { text: "Uptime"; fontFamily: root.fontFamily; anchors.right: parent.right }
-
-        Text {
-          textFormat: Text.PlainText
-          anchors.right: parent.right
-          text: Model.uptimeText(root.cpu.uptime)
-          color: root.foreground
-          font.family: root.fontFamily
-          font.pixelSize: Style.font.body
-          font.bold: true
-        }
-      }
-    }
-  }
-
-  Card {
-    visible: !!root.gpu && root.flag("showGpu")
+    visible: root.gpuHasReadings
     foreground: root.foreground
 
     CardHeader {
@@ -183,8 +290,8 @@ Column {
     StatRow {
       label: root.gpu ? Model.shortGpuName(root.gpu.name) : "Processor"
       dot: root.s1
-      value: root.gpu && isFinite(Number(root.gpu.util)) ? String(Math.round(root.gpu.util)) : "—"
-      unit: root.gpu && isFinite(Number(root.gpu.util)) ? "%" : ""
+      value: root.hasNumber(root.gpu && root.gpu.util) ? String(Math.round(root.gpu.util)) : "—"
+      unit: root.hasNumber(root.gpu && root.gpu.util) ? "%" : ""
       foreground: root.foreground
       fontFamily: root.fontFamily
     }
@@ -200,7 +307,7 @@ Column {
     }
 
     StatRow {
-      visible: !!(root.gpu && isFinite(Number(root.gpu.power)) && root.gpu.power !== null)
+      visible: root.hasNumber(root.gpu && root.gpu.power)
       label: "Power"
       value: root.gpu && root.gpu.power !== null ? String(Math.round(root.gpu.power)) : ""
       unit: "W"

@@ -4,73 +4,73 @@
 // No state lives here — everything is a function of its arguments.
 
 var MODULES = [
-  { id: "cpu",     icon: "󰻠", short: "CPU", label: "CPU",     page: "CpuPage.qml",     graph: true,  ring: true },
+  // Panel-only: the Overview tab is a summary of the others, so it has no bar
+  // readout of its own. `panelOnly` keeps it out of the bar module list while
+  // still letting pageFile() and the tab parser see it.
+  { id: "overview", icon: "", short: "SUM", label: "Overview", page: "OverviewPage.qml", graph: false, ring: false, panelOnly: true },
+  // Labelled "Processor" rather than "CPU" because the same page carries the
+  // GPU when one is present. The id stays "cpu": it appears verbatim in user
+  // settings strings (modules, tabs) and in the manifest aliases, so renaming
+  // it would silently break existing configurations.
+  { id: "cpu",     icon: "󰻠", short: "CPU", label: "Processor", page: "CpuPage.qml",   graph: true,  ring: true },
   { id: "gpu",     icon: "󰢮", short: "GPU", label: "GPU",     page: "CpuPage.qml",     graph: true,  ring: true },
   { id: "memory",  icon: "󰍛", short: "MEM", label: "Memory",  page: "MemoryPage.qml",  graph: true,  ring: true },
   { id: "disks",   icon: "󰋊", short: "DSK", label: "Disks",   page: "DisksPage.qml",   graph: true,  ring: true },
   { id: "network", icon: "󰛳", short: "NET", label: "Network", page: "NetworkPage.qml", graph: true,  ring: false },
-  { id: "sensors", icon: "󰔏", short: "SEN", label: "Sensors", page: "SensorsPage.qml", graph: false, ring: false },
-  { id: "battery", icon: "󰁹", short: "BAT", label: "Battery", page: "BatteryPage.qml", graph: false, ring: true },
   { id: "settings", icon: "󰒓", short: "SET", label: "Settings", page: "SettingsPage.qml", graph: false }
 ]
 
-var PANEL_TABS = ["cpu", "memory", "disks", "network", "sensors", "battery"]
+var PANEL_TABS = ["overview", "cpu", "memory", "disks", "network"]
 
 // Every user-tunable key with its default. Flat keys keep the entry in
 // shell.json readable and editable from Setup → Plugins as well as from the
 // in-panel Settings page. Per-module bar styles live in "<module>Style" and
 // fall back to "style" when empty.
+// Sprite sets shipped with the plugin. Each is 4 fatness levels x 5 gait
+// frames in ui/frames/, generated from a spec by tools/make-runner.py.
+var RUNNERS = ["cat", "catalpha", "dog", "dancer", "sway"]
+
+// Scale each runner so its DRAWN CONTENT is exactly one bar icon tall.
+//
+// Every runner shares a 60x32 box but none of them fills it, and they do not
+// all leave the same margin. The factor here is 32 / (content height), measured
+// off the rendered frames -- so a value of 1.10 means that runner's ink covers
+// 29 of the 32 units and has to be scaled up a touch to match the rest.
+//
+// This replaces numbers picked by eye. Those had the upright figures at 1.25
+// and the cats at 0.85, on the theory that a tall thin runner needed more
+// height to hold its own. Measuring showed the premise was wrong: all five fill
+// the height to within 5% of each other. What actually differs is WIDTH -- the
+// cat spans the whole box, the dancer about a third of it -- and inflating the
+// height was compensating for that in the wrong dimension, which just made the
+// figures taller than every other icon in the bar.
+var RUNNER_SCALE = { cat: 1.10, catalpha: 1.05, dog: 1.06, dancer: 1.06, sway: 1.07 }
+
+function runnerScale(name) {
+  var v = RUNNER_SCALE[name]
+  return typeof v === "number" ? v : 0.85
+}
+
 var SETTINGS = {
-  modules: "cpu,memory,network",
-  style: "both",
-  cpuStyle: "", gpuStyle: "", memoryStyle: "", disksStyle: "", networkStyle: "", sensorsStyle: "", batteryStyle: "",
-  graphWidth: 36,
-  barLabels: "text",
-  disksSource: "all",
-  barSensors: "cpu",
+  runner: "cat",
+  // What the panel shows. Everything that used to configure bar readouts is
+  // gone: the cat is this plugin's bar presence, so there is nothing to lay
+  // out, style or label there.
+  tabs: "overview,cpu,memory,disks,network",
   temperatureUnit: "Celsius",
   refreshSeconds: 1,
   historySeconds: 240,
-  publicIp: true,
-  tabs: "cpu,memory,disks,network,sensors,battery",
   showProcesses: true,
-  showCores: true, showLoad: true, showGpu: true,
-  showBreakdown: true,
-  showVolumes: true, showActivity: true,
-  showInterfaces: true, showTotals: true, showAddresses: true,
-  showTemperatures: true, showFans: true,
-  showHistory: true, showDetails: true, showDevices: true
-}
-
-// Sections each page can hide, as shown on the Settings page.
-var PANEL_SECTIONS = {
-  cpu: [
-    { key: "showCores", label: "Per-core rings" },
-    { key: "showLoad", label: "Load average and uptime" },
-    { key: "showGpu", label: "GPU" }
-  ],
-  memory: [
-    { key: "showBreakdown", label: "Breakdown" }
-  ],
-  disks: [
-    { key: "showVolumes", label: "Volumes" },
-    { key: "showActivity", label: "Read and write activity" }
-  ],
-  network: [
-    { key: "showInterfaces", label: "Interfaces" },
-    { key: "showTotals", label: "Totals since boot" },
-    { key: "publicIp", label: "Public IP address" },
-    { key: "showAddresses", label: "IP addresses" }
-  ],
-  sensors: [
-    { key: "showTemperatures", label: "Temperatures" },
-    { key: "showFans", label: "Fans" }
-  ],
-  battery: [
-    { key: "showHistory", label: "Charge history" },
-    { key: "showDetails", label: "Details" },
-    { key: "showDevices", label: "Devices" }
-  ]
+  // Off by default: looking this up is an outbound request to a third party
+  // (api.ipify.org) that tells them this machine's address. Fine to switch on
+  // deliberately, not fine to do on everyone's behalf the first time the panel
+  // opens.
+  publicIp: false,
+  // Deliberately not in the settings UI. The Disks page names the one physical
+  // disk when every volume sits on it and aggregates otherwise, which covers
+  // every machine that is not a multi-disk workstation. Somebody who needs to
+  // pin it can still set it in shell.json.
+  disksSource: "all"
 }
 
 // Multiple-choice options per page, shown after that page's toggles.
@@ -280,7 +280,10 @@ function tabFor(module) {
   return module === "gpu" ? "cpu" : module
 }
 
-function parseModules(raw) {
+// allowPanelOnly is for the panel's tab list. The bar's module list must not
+// offer "overview": it is a summary page, not a readout, and a BarReadout built
+// from it would have nothing to draw.
+function parseModules(raw, allowPanelOnly) {
   var text = Array.isArray(raw) ? raw.join(",") : String(raw || "")
   var parts = text.toLowerCase().split(/[\s,;]+/)
   var out = []
@@ -289,10 +292,9 @@ function parseModules(raw) {
     if (id === "mem" || id === "ram") id = "memory"
     if (id === "disk" || id === "storage") id = "disks"
     if (id === "net" || id === "wifi") id = "network"
-    if (id === "temp" || id === "temps" || id === "sensor") id = "sensors"
-    if (id === "bat") id = "battery"
     var known = false
-    for (var j = 0; j < MODULES.length; j++) if (MODULES[j].id === id) known = true
+    for (var j = 0; j < MODULES.length; j++)
+      if (MODULES[j].id === id && (allowPanelOnly || !MODULES[j].panelOnly)) known = true
     if (known && out.indexOf(id) === -1) out.push(id)
   }
   return out
@@ -300,12 +302,13 @@ function parseModules(raw) {
 
 // Module tabs in canonical order, filtered by the "tabs" setting and by the
 // hardware present. Never empty: the CPU tab is the floor.
+// hasBattery is vestigial: the battery tab is gone, and the caller still
+// passes it. Kept in the signature so the call sites do not have to change.
 function panelTabs(hasBattery, tabsSetting) {
-  var wanted = parseModules(tabsSetting === undefined ? SETTINGS.tabs : tabsSetting)
+  var wanted = parseModules(tabsSetting === undefined ? SETTINGS.tabs : tabsSetting, true)
   var out = []
   for (var i = 0; i < PANEL_TABS.length; i++) {
     var id = PANEL_TABS[i]
-    if (id === "battery" && !hasBattery) continue
     if (wanted.indexOf(id) === -1) continue
     out.push(id)
   }

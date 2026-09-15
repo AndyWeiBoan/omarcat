@@ -1,4 +1,5 @@
 import QtQuick
+import Quickshell
 import qs.Commons
 import qs.Ui
 import "../Model.js" as Model
@@ -40,158 +41,264 @@ Column {
     return ""
   }
 
+  // The physical disk behind the activity figures. With an explicit source
+  // setting it is that device; otherwise, when every volume sits on one disk,
+  // it is that disk. Anything more mixed stays generic rather than picking a
+  // device arbitrarily.
+  readonly property string activityDisk: {
+    if (root.singleDisk)
+      return root.source;
+    const names = {};
+    for (let i = 0; i < root.volumes.length; i++) {
+      const name = String(root.volumes[i].disk || "");
+      if (name)
+        names[name] = true;
+    }
+    const list = Object.keys(names);
+    return list.length === 1 ? list[0] : "";
+  }
+
+  readonly property string activityTitle: root.activityDisk || "Activity"
+
+  readonly property string activityDetail: {
+    const parts = [];
+    if (root.sourceModel)
+      parts.push(root.sourceModel);
+    const perDisk = root.disks.perDisk || ({});
+    const entry = root.activityDisk ? perDisk[root.activityDisk] : null;
+    const temp = entry ? Number(entry.temp) : NaN;
+    if (entry && temp !== null && isFinite(temp))
+      parts.push(Model.tempText(temp, root.temperatureUnit));
+    return parts.join("  ·  ");
+  }
+
+  // Every volume's capacity added together -- what the disk is divided into.
+  // Deliberately the sum of the partitions rather than the raw device size: any
+  // unpartitioned tail is space this page cannot say anything useful about.
+  readonly property real volumesTotal: {
+    let sum = 0;
+    for (let i = 0; i < root.volumes.length; i++)
+      sum += Model.num(root.volumes[i].size);
+    return Math.max(1, sum);
+  }
+
+  readonly property real volumesUsed: {
+    let sum = 0;
+    for (let i = 0; i < root.volumes.length; i++)
+      sum += Model.num(root.volumes[i].used);
+    return sum;
+  }
+
+  readonly property real volumesPercent: root.volumesUsed / root.volumesTotal * 100
+
+  readonly property var volumeColors: [root.s1, root.s2, root.warn]
+
+  // Segments are sized by CAPACITY and filled by usage -- a partition map, not
+  // a usage bar. Sizing them by usage instead made `/boot` 0.0135% of the width
+  // (0.06 of a pixel) and therefore invisible, and padding it to a visible
+  // minimum would have claimed it takes a hundred times the space it does.
+  readonly property var volumeSegments: {
+    const out = [];
+    for (let i = 0; i < root.volumes.length; i++) {
+      const volume = root.volumes[i];
+      const size = Math.max(1, Model.num(volume.size, 1));
+      out.push({
+        value: size / root.volumesTotal,
+        fill: Model.num(volume.used) / size,
+        color: root.volumeColors[i % root.volumeColors.length]
+      });
+    }
+    return out;
+  }
+
+  readonly property var volumeRows: {
+    const out = [];
+    for (let i = 0; i < root.volumes.length; i++) {
+      const volume = root.volumes[i];
+      const size = Math.max(1, Model.num(volume.size, 1));
+      const used = Model.num(volume.used);
+      const parts = Model.bytesParts(used);
+      out.push({
+        mount: volume.mount,
+        label: Model.volumeName(volume.mount),
+        // Its own fullness, not its share of the disk: a 2 GB /boot at 90% is
+        // in trouble while contributing almost nothing to the bar above.
+        detail: Model.percentText(used / size * 100) + " of "
+              + Model.bytesText(size) + "  ·  " + String(volume.fstype || ""),
+        value: parts.value,
+        unit: parts.unit,
+        color: root.volumeColors[i % root.volumeColors.length]
+      });
+    }
+    return out;
+  }
+
   function openVolume(mount) {
     if (!mount) return
     Util.execArgv(["xdg-open", String(mount)])
     if (host && typeof host.close === "function") host.close()
   }
 
+  // Built only from what the scan actually returned. Anything the script could
+  // not measure is reported as such rather than being folded into the gap.
+  readonly property var storageRows: {
+    const out = [];
+    const push = function(label, bytes, detail, indented) {
+      const parts = Model.bytesParts(bytes);
+      out.push({ label: label, value: parts.value, unit: parts.unit,
+                 detail: detail || "", indented: indented === true });
+    };
+
+    const packages = storage.bytesOf("packages");
+    if (packages > 0) {
+      const count = storage.rows["packages"].extra;
+      push("Packages", packages, count ? count + " installed" : "");
+    }
+
+    const home = storage.bytesOf("home");
+    if (home > 0)
+      push("Home", home);
+
+    // The three biggest things inside home, because "3.6 GB" on its own does
+    // not tell anyone which directory to look at.
+    const children = [];
+    for (const key in storage.rows) {
+      if (key.indexOf("home:") !== 0)
+        continue;
+      const name = key.slice(5);
+      if (!name || name === ".cache")
+        continue;
+      children.push({ name: name, bytes: storage.rows[key].bytes });
+    }
+    children.sort(function(a, b) { return b.bytes - a.bytes; });
+    for (let i = 0; i < Math.min(3, children.length); i++)
+      if (children[i].bytes > 0)
+        push(children[i].name, children[i].bytes, "", true);
+
+    // Caches get their own billing because they are the actionable part: these
+    // are the entries somebody can delete tonight and get the space back.
+    for (const cacheKey in storage.rows) {
+      if (cacheKey.indexOf("cache:") !== 0)
+        continue;
+      const path = cacheKey.slice(6);
+      const bytes = storage.rows[cacheKey].bytes;
+      const short = path.replace(String(Quickshell.env("HOME")), "~");
+      if (bytes < 0)
+        out.push({ label: short, value: "needs root", unit: "", detail: "", indented: true });
+      else if (bytes > 0)
+        push(short, bytes, "clearable", true);
+    }
+
+    // Snapshots: usually the largest single consumer on a btrfs root, and
+    // unreadable without privileges. Naming it is the whole point -- an
+    // unexplained gap invites guessing.
+    let snapshotsUnknown = false;
+    for (const snapKey in storage.rows) {
+      if (snapKey.indexOf("snapshots:") !== 0)
+        continue;
+      const bytes = storage.rows[snapKey].bytes;
+      if (bytes < 0) {
+        snapshotsUnknown = true;
+        out.push({ label: "Snapshots", value: "needs root", unit: "",
+                   detail: snapKey.slice(10), indented: false });
+      } else if (bytes > 0) {
+        push("Snapshots", bytes, snapKey.slice(10));
+      }
+    }
+
+    // What is left over after everything above. Named, not hidden -- and when
+    // snapshots are present but unreadable, say so here too, because that is
+    // almost certainly where it went.
+    const accounted = packages + home + storage.bytesOf("cache:/var/cache/pacman/pkg");
+    const unaccounted = storage.bytesOf("fs_used") - accounted;
+    if (unaccounted > 0)
+      push("Unaccounted", unaccounted, snapshotsUnknown ? "mostly snapshots" : "");
+
+    return out;
+  }
+
   width: parent ? parent.width : implicitWidth
   spacing: Style.space(10)
 
+  // One bar for the whole disk, split by volume -- the same shape as the memory
+  // page, and for the same reason: these parts DO share one real total. `/` and
+  // `/boot` are carved out of one 477 GB NVMe, so stacking them is the truth
+  // about that disk rather than an implication that two unrelated numbers add
+  // up.
+  //
+  // The caveat, which is why each volume also gets its own figure below: free
+  // space is NOT fungible across partitions. A full `/boot` is not rescued by
+  // the space left on `/`.
   Card {
-    visible: root.flag("showVolumes")
+    visible: root.volumes.length > 0
     foreground: root.foreground
-    spacing: Style.space(4)
+    spacing: Style.space(10)
 
-    Text {
-      textFormat: Text.PlainText
-      visible: root.volumes.length === 0
-      text: "No mounted volumes"
-      color: root.foreground
-      opacity: 0.5
-      font.family: root.fontFamily
-      font.pixelSize: Style.font.bodySmall
+    Item {
+      width: parent.width
+      implicitHeight: Math.max(diskTitle.implicitHeight, diskValue.implicitHeight)
+
+      Text {
+        id: diskTitle
+        textFormat: Text.PlainText
+        anchors.left: parent.left
+        anchors.baseline: diskValue.baseline
+        text: root.activityDisk || "Storage"
+        color: Color.accent
+        font.family: root.fontFamily
+        font.pixelSize: Style.font.subtitle
+        font.bold: true
+      }
+
+      Text {
+        id: diskValue
+        textFormat: Text.PlainText
+        anchors.right: parent.right
+        anchors.top: parent.top
+        text: Model.percentText(root.volumesPercent)
+        color: root.foreground
+        font.family: root.fontFamily
+        font.pixelSize: Style.font.display
+        font.bold: true
+      }
     }
 
+    StackBar {
+      width: parent.width
+      foreground: root.foreground
+      segments: root.volumeSegments
+    }
+
+    // Per volume, because the stacked bar says how the disk is divided but not
+    // how close any one partition is to full -- and that is the number that
+    // actually bites.
     Repeater {
-      model: root.volumes.length
+      model: root.volumeRows
 
-      delegate: Item {
-        id: row
-        required property int index
-        readonly property var modelData: root.volumes[index] || ({})
-        readonly property real fraction: modelData.size > 0 ? modelData.used / modelData.size : 0
-        readonly property string tempText: isFinite(Number(modelData.temp)) && modelData.temp !== null
-          ? Model.tempText(modelData.temp, root.temperatureUnit) : ""
-
+      delegate: StatRow {
+        required property var modelData
         width: parent.width
-        height: Style.space(34)
+        label: modelData.label
+        detail: modelData.detail
+        value: modelData.value
+        unit: modelData.unit
+        dot: modelData.color
+        foreground: root.foreground
+        fontFamily: root.fontFamily
 
-        MiniRing {
-          id: ring
-          anchors.left: parent.left
-          anchors.verticalCenter: parent.verticalCenter
-          size: Style.space(24)
-          thickness: Style.spaceReal(3)
-          value: row.fraction
-          color: row.fraction >= 0.92 ? root.danger : (row.fraction >= 0.8 ? root.warn : root.s1)
-          foreground: root.foreground
-        }
-
-        Text {
-          textFormat: Text.PlainText
-          anchors.centerIn: ring
-          text: Math.round(row.fraction * 100)
-          color: root.foreground
-          opacity: 0.85
-          font.family: root.fontFamily
-          font.pixelSize: Math.max(7, Style.font.caption - 2)
-          font.bold: true
-        }
-
-        Column {
-          anchors.left: ring.right
-          anchors.leftMargin: Style.space(10)
-          anchors.right: trailing.left
-          anchors.rightMargin: Style.space(8)
-          anchors.verticalCenter: parent.verticalCenter
-          spacing: 0
-
-          Text {
-            textFormat: Text.PlainText
-            width: parent.width
-            text: Model.volumeName(row.modelData.mount)
-            color: root.foreground
-            font.family: root.fontFamily
-            font.pixelSize: Style.font.body
-            font.bold: true
-            elide: Text.ElideRight
-          }
-
-          Text {
-            textFormat: Text.PlainText
-            width: parent.width
-            text: Model.bytesText(row.modelData.avail) + " available"
-            color: root.foreground
-            opacity: 0.55
-            font.family: root.fontFamily
-            font.pixelSize: Style.font.caption
-            elide: Text.ElideRight
-          }
-        }
-
-        Column {
-          id: trailing
-          anchors.right: parent.right
-          anchors.verticalCenter: parent.verticalCenter
-          spacing: 0
-
-          Measure {
-            anchors.right: parent.right
-            value: Model.bytesParts(row.modelData.size).value
-            unit: Model.bytesParts(row.modelData.size).unit
-            foreground: root.foreground
-            fontFamily: root.fontFamily
-            bold: false
-            valueOpacity: 0.85
-          }
-
-          Text {
-            textFormat: Text.PlainText
-            anchors.right: parent.right
-            text: [row.modelData.fstype, row.tempText].filter(function(v) { return !!v }).join(" · ")
-            color: root.foreground
-            opacity: 0.45
-            font.family: root.fontFamily
-            font.pixelSize: Style.font.caption
-          }
-        }
-
-        MouseArea {
-          id: hover
-          anchors.fill: parent
-          hoverEnabled: true
-          cursorShape: Qt.PointingHandCursor
-          onClicked: root.openVolume(row.modelData.mount)
-        }
-
-        Rectangle {
-          anchors.fill: parent
-          anchors.leftMargin: -Style.space(6)
-          anchors.rightMargin: -Style.space(6)
-          z: -1
-          radius: Style.cornerRadius
-          color: hover.containsMouse ? Style.hoverFillFor(root.foreground, Color.accent) : "transparent"
-        }
-
-        PanelToolTip {
-          visible: hover.containsMouse
-          text: [row.modelData.model, row.modelData.device, row.modelData.mount].filter(function(v) { return !!v }).join("\n") + "\nClick to open in Files"
-          fontFamily: root.fontFamily
-        }
+        TapHandler { onTapped: root.openVolume(modelData.mount) }
       }
     }
   }
 
   Card {
-    visible: root.flag("showActivity")
     foreground: root.foreground
 
+    // The physical disk, named, with the temperature that belongs to it -- the
+    // one place it is true rather than repeated per volume.
     CardHeader {
-      visible: root.singleDisk
-      title: "Activity"
-      detail: root.singleDisk ? root.source + (root.sourceModel ? " · " + root.sourceModel : "") : ""
+      title: root.activityTitle
+      detail: root.activityDetail
       foreground: root.foreground
       fontFamily: root.fontFamily
     }
@@ -237,6 +344,88 @@ Column {
         { color: root.s2, label: "Read peak", value: Model.rateParts(graph.peakUp).value, unit: Model.rateParts(graph.peakUp).unit },
         { color: root.s1, label: "Write peak", value: Model.rateParts(graph.peakDown).value, unit: Model.rateParts(graph.peakDown).unit }
       ]
+    }
+  }
+
+  StorageScan { id: storage }
+
+  // Where the disk went -- from sources that need no privileges, and honest
+  // about the part it cannot reach.
+  //
+  // Explicitly NOT a macOS-style category pie. macOS gets Applications /
+  // Documents / Photos out of Spotlight and system APIs; Linux has no
+  // equivalent. Worse, on a btrfs root with snapshots the walkable paths do not
+  // add up to the used space -- measured on this machine: 13 GB of live paths
+  // against 40 GB used, with the difference held by snapper snapshots that sit
+  // outside every live path and behind root-only subvolume calls. A pie built
+  // from an unprivileged walk would put two thirds of the disk in "other",
+  // which looks like an answer without being one.
+  //
+  // So: report what can be accounted for, name what cannot, and lean towards
+  // the entries a person can actually act on.
+  Card {
+    foreground: root.foreground
+    spacing: Style.space(6)
+
+    Item {
+      width: parent.width
+      implicitHeight: Math.max(storageTitle.implicitHeight, scanButton.implicitHeight)
+
+      SectionTitle {
+        id: storageTitle
+        text: "Where it went"
+        fontFamily: root.fontFamily
+      }
+
+      Text {
+        id: scanButton
+        textFormat: Text.PlainText
+        anchors.right: parent.right
+        anchors.verticalCenter: parent.verticalCenter
+        text: storage.scanning ? "Scanning…" : (storage.scanned ? "Rescan" : "Scan")
+        color: scanArea.containsMouse && !storage.scanning ? Color.accent : root.foreground
+        opacity: storage.scanning ? 0.5 : 0.75
+        font.family: root.fontFamily
+        font.pixelSize: Style.font.caption
+
+        MouseArea {
+          id: scanArea
+          anchors.fill: parent
+          anchors.margins: -Style.space(4)
+          hoverEnabled: true
+          cursorShape: storage.scanning ? Qt.ArrowCursor : Qt.PointingHandCursor
+          onClicked: storage.scan()
+        }
+      }
+    }
+
+    Text {
+      textFormat: Text.PlainText
+      width: parent.width
+      visible: !storage.scanned
+      text: "Walks your home directory. Run it when you are hunting for space."
+      color: root.foreground
+      opacity: 0.45
+      font.family: root.fontFamily
+      font.pixelSize: Style.font.caption
+      wrapMode: Text.WordWrap
+    }
+
+    Repeater {
+      model: storage.scanned ? root.storageRows : []
+
+      delegate: StatRow {
+        required property var modelData
+        width: parent.width
+        label: modelData.label
+        detail: modelData.detail
+        value: modelData.value
+        unit: modelData.unit
+        labelOpacity: modelData.indented ? 0.5 : 0.85
+        boldValue: !modelData.indented
+        foreground: root.foreground
+        fontFamily: root.fontFamily
+      }
     }
   }
 

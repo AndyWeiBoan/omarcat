@@ -11,6 +11,12 @@ Item {
   property color foreground: Color.popups.text
   property string fontFamily: Style.font.family
 
+  // Opt-in: park the detail immediately after the title instead of at the far
+  // right edge. Worth it when the detail belongs TO the title ("CPU, and here
+  // is how fast and how hot it is") rather than being a separate fact that
+  // happens to share the line.
+  property bool inlineDetail: false
+
   width: parent ? parent.width : implicitWidth
   implicitHeight: Math.max(titleText.implicitHeight, detailText.implicitHeight)
   height: implicitHeight
@@ -27,6 +33,20 @@ Item {
     font.bold: true
     elide: Text.ElideRight
     width: Math.min(implicitWidth, parent.width - detailText.width - Style.space(8))
+  }
+
+  // Anchored one way or the other, never both: an Item can only honour one
+  // horizontal anchor pair at a time.
+  states: State {
+    when: root.inlineDetail
+    AnchorChanges {
+      target: detailText
+      anchors.right: undefined
+      anchors.left: titleText.right
+    }
+    PropertyChanges {
+      detailText.anchors.leftMargin: Style.space(8)
+    }
   }
 
   Text {

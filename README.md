@@ -1,3 +1,8 @@
+> **Omarcat** is a fork of [OmaStats](https://github.com/crmne/omastats) by
+> Carmine Paolino, MIT licensed. The sampler, the panel framework and the
+> running-cat artwork (`ui/frames/*.svg`) are his original work; Omarcat adds
+> the overview page and the memory-pressure cat colours. See `LICENSE`.
+
 # OmaStats
 
 A system monitor for the [Omarchy](https://omarchy.org) bar, in the spirit of
@@ -170,10 +175,6 @@ nothing shifts when you switch, and the panel sizes itself so every tab is
 named in full. Abbreviations live only in the bar, where height is scarce:
 the readouts stack the module's letters (CPU, MEM, DSK, NET) the way iStat
 Menus labels its menubar items, unless you prefer glyphs.
-
-## Packaging maintenance
-
-Release packaging uses the [native-packages](https://rubygems.org/gems/native-packages) gem. `native-packages.yaml` declares packages and downstream repositories; native recipes and installation assets live in `packaging/`; see [PACKAGING.md](PACKAGING.md) for local commands and CI behavior.
 
 ## License
 
