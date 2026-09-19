@@ -97,14 +97,26 @@ Column {
   // a usage bar. Sizing them by usage instead made `/boot` 0.0135% of the width
   // (0.06 of a pixel) and therefore invisible, and padding it to a visible
   // minimum would have claimed it takes a hundred times the space it does.
+  // One band per volume, each the space that volume has USED as a share of the
+  // whole disk, with whatever is left over showing as the bare track.
+  //
+  // It used to draw each volume's full extent as a dim slot with a bright
+  // portion inside it -- how the disk is divided, and how full each division
+  // is, in one bar. The trouble is what that looks like on a real machine:
+  // root is 226 GB of a 227 GB disk, so its dim slot is nearly the entire bar
+  // and reads as a fourth colour with no row beside it, while the two 500 MB
+  // partitions are a pixel each. andywei's words were that the bar's colours
+  // did not map to all the roles, and they did not.
+  //
+  // So the bar answers one question -- where has the space gone -- and every
+  // band on it has a row underneath in the same colour. How full any one
+  // partition is stays on its own row, in words: "16% of 226 GB".
   readonly property var volumeSegments: {
     const out = [];
     for (let i = 0; i < root.volumes.length; i++) {
       const volume = root.volumes[i];
-      const size = Math.max(1, Model.num(volume.size, 1));
       out.push({
-        value: size / root.volumesTotal,
-        fill: Model.num(volume.used) / size,
+        value: Model.num(volume.used) / Math.max(1, root.volumesTotal),
         color: root.volumeColors[i % root.volumeColors.length]
       });
     }
