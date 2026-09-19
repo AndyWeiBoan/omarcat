@@ -153,7 +153,7 @@ Column {
       elide: Text.ElideRight
     }
 
-    ToggleSwitch {
+    CatSwitch {
       id: flagSwitch
       anchors.right: parent.right
       anchors.verticalCenter: parent.verticalCenter
