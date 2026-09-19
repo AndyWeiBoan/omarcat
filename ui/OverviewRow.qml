@@ -194,9 +194,14 @@ Item {
         visible: root.target !== ""
         anchors.right: parent.right
         anchors.baseline: valueText.baseline
+        // Grey, not blue. A disclosure chevron is not something you act on by
+        // itself -- the row is -- and macOS draws it in a light grey in System
+        // Settings and in the Finder sidebar alike. The Control Center rows one
+        // panel over already draw theirs from the foreground; this one was the
+        // odd man out.
         text: "›"
-        color: Color.accent
-        opacity: rowHover.hovered ? 1 : 0.55
+        color: Util.alpha(root.foreground, rowHover.hovered ? Model.INK.secondary : Model.INK.tertiary)
+        opacity: 1
         font.family: root.fontFamily
         font.pixelSize: Style.font.subtitle
       }
