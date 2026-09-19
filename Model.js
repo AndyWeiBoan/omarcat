@@ -48,33 +48,36 @@ var INK = {
 // Overview row badges: a glyph and the colour of the rounded square it sits in.
 //
 // The shape is macOS System Settings': a small filled squircle with a white
-// symbol, one per row, which is what lets the eye find a row without reading
-// it. Activity Monitor has no badges at all, so this is the Settings
-// convention rather than a copy of any one window.
+// symbol, one per row. Activity Monitor has no badges at all, so this is the
+// Settings convention rather than a copy of any one window.
 //
-// The colours are Apple's own system palette, read out of AppKit rather than
-// eyeballed (NSColor.systemBlue and friends, light appearance):
+// **Every badge is the same neutral grey, on purpose.** Apple's system palette
+// was measured out of AppKit and tried here first -- blue CPU, purple memory,
+// orange disk, green battery -- and it looked good and was wrong. In this panel
+// colour already has a job: LevelBar uses it for severity, blue through red,
+// and CoreRow says so in as many words ("colour here is already spoken for").
+// A permanently orange disk badge sitting over a blue "nothing is wrong" bar
+// reads as a warning, and a green battery makes a judgement a badge has no
+// business making. The symbols are distinct enough to tell the rows apart by
+// shape; the colour channel stays free to mean one thing.
 //
-//     systemBlue #007aff   systemPurple #af52de   systemOrange #ff9500
-//     systemGreen #28cd41  systemTeal   #59adc4   systemGray   #8e8e93
-//
-// Which subsystem gets which hue is a choice, not a measurement: Apple has no
-// stats panel to copy. The rule used here is that neighbours must not share a
-// hue, so the column can be scanned.
+// systemGray, read out of AppKit rather than eyeballed.
 //
 // Glyphs stay numeric (see the README): the font's codepoints sit in a plane
 // that some editing tools silently mangle.
+var BADGE_TINT = "#8e8e93"
+
 var ROW_BADGE = {
-  cpu:     { glyph: String.fromCodePoint(0xf0ee0), tint: "#007aff" },
-  memory:  { glyph: String.fromCodePoint(0xf035b), tint: "#af52de" },
-  disks:   { glyph: String.fromCodePoint(0xf02ca), tint: "#ff9500" },
-  battery: { glyph: String.fromCodePoint(0xf0079), tint: "#28cd41" },
-  network: { glyph: String.fromCodePoint(0xf06f3), tint: "#59adc4" },
-  fans:    { glyph: String.fromCodePoint(0xf0210), tint: "#8e8e93" }
+  cpu:     { glyph: String.fromCodePoint(0xf0ee0), tint: BADGE_TINT },
+  memory:  { glyph: String.fromCodePoint(0xf035b), tint: BADGE_TINT },
+  disks:   { glyph: String.fromCodePoint(0xf02ca), tint: BADGE_TINT },
+  battery: { glyph: String.fromCodePoint(0xf0079), tint: BADGE_TINT },
+  network: { glyph: String.fromCodePoint(0xf06f3), tint: BADGE_TINT },
+  fans:    { glyph: String.fromCodePoint(0xf0210), tint: BADGE_TINT }
 }
 
 function rowBadge(id) {
-  return ROW_BADGE[id] || { glyph: "", tint: "#8e8e93" }
+  return ROW_BADGE[id] || { glyph: "", tint: BADGE_TINT }
 }
 
 var PANEL_TABS = ["overview", "cpu", "memory", "disks", "network"]
