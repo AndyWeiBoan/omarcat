@@ -85,7 +85,11 @@ Item {
 
   readonly property real hInset: Style.space(12)
   readonly property real vPad: Style.space(10)
-  readonly property real badgeSize: Style.space(22)
+  // The same 26pt across as the Control Center's badge, which is the measured
+  // macOS figure. Written as Style.space(24) rather than a flat 26 so it still
+  // follows the text size -- at this theme's base-size of 13 the two land on
+  // the same number, and they move together from there.
+  readonly property real badgeSize: Style.space(24)
   // Everything on the row lines up past the badge, the way an indented list
   // does -- including the bar, so the bars start on one edge down the column.
   readonly property real contentInset: icon === "" ? hInset : hInset + badgeSize + Style.space(10)
@@ -150,7 +154,7 @@ Item {
       // Smaller than it was in the square. A circle's usable area falls away
       // at the corners, so the same glyph that sat comfortably in a squircle
       // crowds the edge of a disc of the same width.
-      font.pixelSize: Math.round(root.badgeSize * 0.56)
+      font.pixelSize: Math.round(root.badgeSize * 0.58)
     }
   }
 
