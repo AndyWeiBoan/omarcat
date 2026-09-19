@@ -134,9 +134,11 @@ Item {
     y: root.vPad
     width: root.badgeSize
     height: root.badgeSize
-    // macOS draws these as squircles; a plain radius at this size is within a
-    // pixel of one, and Qt has no squircle.
-    radius: Math.round(root.badgeSize * 0.26)
+    // A circle, the same shape the Control Center puts its badges in. The
+    // rounded square is System Settings' shape and it belongs with System
+    // Settings' saturated fill; with the quiet well underneath, the circle is
+    // what the rest of this design language already uses.
+    radius: root.badgeSize / 2
     color: root.iconFill
 
     Text {
@@ -145,7 +147,10 @@ Item {
       text: root.icon
       color: root.iconInk
       font.family: root.iconFont !== "" ? root.iconFont : root.fontFamily
-      font.pixelSize: Math.round(root.badgeSize * 0.62)
+      // Smaller than it was in the square. A circle's usable area falls away
+      // at the corners, so the same glyph that sat comfortably in a squircle
+      // crowds the edge of a disc of the same width.
+      font.pixelSize: Math.round(root.badgeSize * 0.56)
     }
   }
 
