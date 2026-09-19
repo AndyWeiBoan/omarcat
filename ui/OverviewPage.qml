@@ -129,6 +129,18 @@ Column {
   readonly property bool hasBattery: bat.present === true
   readonly property bool charging: bat.acOnline === true
 
+  // Which battery symbol the row wears. Charging outranks the level: "is it
+  // plugged in" and "how much is left" are two questions, and while it is
+  // plugged in the first one is the answer. Full is not charging -- a bolt on a
+  // topped-up battery reads as still drawing power.
+  readonly property string batteryBadgeId: {
+    if (!root.hasBattery) return "battery";
+    const pct = Math.max(0, Math.min(100, Model.num(root.bat.percent)));
+    if (root.charging && pct < 100 && String(root.bat.status || "") !== "Full")
+      return "battery.charging";
+    return "battery." + (Math.round(pct / 25) * 25);
+  }
+
   // ------------------------------------------------------------------- CPU
 
   // One group, not one card per subsystem. See OverviewRow for why.
@@ -262,8 +274,8 @@ Column {
         visible: root.hasBattery
         width: parent.width
         title: "Battery"
-        icon: root.host ? root.host.badgeFor("battery").glyph : Model.rowBadge("battery").glyph
-        iconFont: root.host ? root.host.badgeFor("battery").family : root.fontFamily
+        icon: root.host ? root.host.badgeFor(root.batteryBadgeId, "battery").glyph : Model.rowBadge("battery").glyph
+        iconFont: root.host ? root.host.badgeFor(root.batteryBadgeId, "battery").family : root.fontFamily
         subtitle: hw.modelOf("battery")
         value: Model.percentText(Model.num(root.bat.percent))
         level: Model.num(root.bat.percent)

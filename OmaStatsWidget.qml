@@ -67,10 +67,16 @@ Panel {
   // nothing about keeps the Nerd Font glyph and the bar's own font, so a theme
   // with no file is untouched by any of this. The badge's fill and ink are not
   // here -- they come from the panel's own foreground, in OverviewRow.
-  function badgeFor(id) {
-    var fallback = Model.rowBadge(id)
+  // `id` is the most specific name -- "battery.charging", "battery.50" -- and
+  // `baseId` the general one to fall back on when neither the theme nor Model
+  // has that variant. A theme only has to map the states it cares to draw.
+  function badgeFor(id, baseId) {
     var table = root.themeIcons && root.themeIcons.badges ? root.themeIcons.badges : null
     var entry = table ? table[id] : null
+    if ((!entry || !isFinite(Number(entry.codepoint))) && baseId)
+      entry = table ? table[baseId] : null
+    var fallback = Model.rowBadge(id)
+    if (!fallback.glyph && baseId) fallback = Model.rowBadge(baseId)
     if (!entry || !isFinite(Number(entry.codepoint)))
       return { glyph: fallback.glyph, family: root.fontFamily }
     return {

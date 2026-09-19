@@ -68,6 +68,10 @@ var ROW_BADGE = {
   memory:  { glyph: String.fromCodePoint(0xf035b) },
   disks:   { glyph: String.fromCodePoint(0xf02ca) },
   battery: { glyph: String.fromCodePoint(0xf0079) },
+  // Charging gets its own glyph. Levels do not: five Nerd Font battery states
+  // would be five more codepoints to keep true, and the row already prints the
+  // percentage. A theme that maps SF Symbols gets the full set (see omarcat.json).
+  "battery.charging": { glyph: String.fromCodePoint(0xf0084) },
   network: { glyph: String.fromCodePoint(0xf06f3) },
   fans:    { glyph: String.fromCodePoint(0xf0210) }
 }
