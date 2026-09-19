@@ -23,8 +23,15 @@ Item {
   // happens to share the line.
   property bool inlineDetail: false
 
+  // The card's headline reading, set at the far right of the title line -- the
+  // shape every other page's first card already uses ("Memory ....... 38%").
+  // When it is present the detail moves in beside the title, because the right
+  // of the line now belongs to the figure.
+  property string value: ""
+  property string unit: ""
+
   width: parent ? parent.width : implicitWidth
-  implicitHeight: Math.max(titleText.implicitHeight, detailText.implicitHeight)
+  implicitHeight: Math.max(titleText.implicitHeight, detailText.implicitHeight, figure.implicitHeight)
   height: implicitHeight
 
   Text {
@@ -44,7 +51,7 @@ Item {
   // Anchored one way or the other, never both: an Item can only honour one
   // horizontal anchor pair at a time.
   states: State {
-    when: root.inlineDetail
+    when: root.inlineDetail || root.value !== ""
     AnchorChanges {
       target: detailText
       anchors.right: undefined
@@ -53,6 +60,19 @@ Item {
     PropertyChanges {
       detailText.anchors.leftMargin: Style.space(8)
     }
+  }
+
+  Measure {
+    id: figure
+    visible: root.value !== ""
+    anchors.right: parent.right
+    anchors.verticalCenter: parent.verticalCenter
+    value: root.value
+    unit: root.unit
+    valueSize: Style.font.heading
+    unitSize: Style.font.body
+    foreground: root.foreground
+    fontFamily: root.fontFamily
   }
 
   Text {

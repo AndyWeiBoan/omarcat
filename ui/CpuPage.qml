@@ -130,6 +130,12 @@ Column {
         if (speed) parts.push(speed);
         return parts.join("  \u00b7  ");
       }
+      // The current reading sits on this line rather than on one of its own.
+      // As its own row it cost 34pt to repeat a number that the Overview page
+      // already shows, and it put the graph -- the thing this page has that the
+      // Overview page does not -- below the fold on a short screen.
+      value: Model.percentText(Model.num(root.cpu.total)).replace("%", "")
+      unit: "%"
       inlineDetail: true
       foreground: root.foreground
       fontFamily: root.fontFamily
@@ -140,18 +146,12 @@ Column {
     // two headlines for one number and the history, which is the thing the
     // Overview page cannot show, got two thirds of the width. The ring's own
     // two facts, clock speed and die temperature, are on the header line above.
-    Measure {
-      value: Model.percentText(Model.num(root.cpu.total)).replace("%", "")
-      unit: "%"
-      valueSize: Style.font.displayLarge
-      unitSize: Style.font.subtitle
-      foreground: root.foreground
-      fontFamily: root.fontFamily
-    }
-
     HistoryGraph {
       width: parent.width
-      height: Style.space(64)
+      // 40, not 64. At a third of the width the old height was proportionate;
+      // at full width the same number is mostly empty sky, and a line chart
+      // reads its shape from the horizontal anyway.
+      height: Style.space(40)
       series: [root.hist.cpuUser || [], root.hist.cpuSystem || []]
       colors: [root.s1, root.s2]
       ceiling: 100
