@@ -22,6 +22,12 @@ Item {
   id: root
 
   property string title: ""
+  // The rounded-square badge macOS System Settings puts at the head of a row:
+  // a filled squircle with a white symbol in it. It is what lets the column be
+  // scanned without reading -- the eye finds "the green one" long before it
+  // finds the word "Battery". See Model.ROW_BADGE.
+  property string icon: ""
+  property color iconTint: "#8e8e93"
   // The hardware this row is about -- the CPU part, the disk, the wifi chip.
   // Quiet and directly under the title, because it answers "which one is this"
   // and never changes; the number beside it is the thing being watched.
@@ -64,6 +70,10 @@ Item {
 
   readonly property real hInset: Style.space(12)
   readonly property real vPad: Style.space(10)
+  readonly property real badgeSize: Style.space(22)
+  // Everything on the row lines up past the badge, the way an indented list
+  // does -- including the bar, so the bars start on one edge down the column.
+  readonly property real contentInset: icon === "" ? hInset : hInset + badgeSize + Style.space(10)
 
   width: parent ? parent.width : implicitWidth
   implicitHeight: body.implicitHeight + vPad * 2
@@ -94,14 +104,41 @@ Item {
   Hairline {
     visible: root.showSeparator
     foreground: root.foreground
-    inset: root.hInset
+    // Inset to where the text starts, not to the badge: Apple's rule, and the
+    // reason a grouped list reads as one object rather than a stack of slabs.
+    inset: root.contentInset
+  }
+
+  // The badge sits against the row's own top padding rather than centred on the
+  // whole row: a row with a two-line detail is tall, and a badge floating in
+  // the middle of it stops lining up with the title it belongs to.
+  Rectangle {
+    id: badge
+    visible: root.icon !== ""
+    x: root.hInset
+    y: root.vPad
+    width: root.badgeSize
+    height: root.badgeSize
+    // macOS draws these as squircles; a plain radius at this size is within a
+    // pixel of one, and Qt has no squircle.
+    radius: Math.round(root.badgeSize * 0.26)
+    color: root.iconTint
+
+    Text {
+      anchors.centerIn: parent
+      textFormat: Text.PlainText
+      text: root.icon
+      color: "white"
+      font.family: root.fontFamily
+      font.pixelSize: Math.round(root.badgeSize * 0.62)
+    }
   }
 
   Column {
     id: body
-    x: root.hInset
+    x: root.contentInset
     y: root.vPad
-    width: root.width - root.hInset * 2
+    width: root.width - root.contentInset - root.hInset
     spacing: Style.space(5)
 
     Item {
