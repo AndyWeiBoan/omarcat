@@ -111,14 +111,44 @@ Item {
   // trimmed a little: the frames run edge to edge (ear tips to paws) where a
   // glyph carries its own internal padding, so a full-canvas cat reads bigger
   // than its neighbours. The frames use a 60x32 viewBox.
-  readonly property int catHeight: Math.round(Style.bar.iconCanvas * Model.runnerScale(root.runner))
+  // Sized off icon-font, NOT icon-canvas.
+  //
+  // BarIconButton hands drawn icons the `icon-canvas` box and renders glyphs
+  // at `icon-font`; they are independent tokens and omarchy's defaults make
+  // them 16 and 13. Taking runnerScale (0.65) of the canvas therefore put the
+  // cat at 0.65*16 = 10.4 against glyphs at 13 -- measured in a stock theme,
+  // 32.7% of bar height beside a robot at 55.8%.
+  //
+  // 1.847 is the canvas size at which a drawn icon matches an SF Symbols
+  // glyph at the same icon-font (derived in omarchy-control-center's
+  // ui/CcSwitchIcon.qml from switch.2's 0.933 ink ratio). runnerScale then
+  // trims from there, which is what it was always meant to do. At icon-font
+  // 15 this gives 15 * 1.847 * 0.65 = 18, the value it already had, so the
+  // themes that tuned against it do not move.
+  readonly property int catHeight: Math.round(Style.bar.iconFont * 1.847 * Model.runnerScale(root.runner))
   readonly property int catWidth: Math.round(catHeight * 60 / 32)
+
+  // The frames do NOT run edge to edge, despite what the catHeight comment
+  // above says. Rendered and measured across catalpha's five frames, the ink
+  // fills 0.767 to 0.833 of the 60x32 viewBox horizontally -- mean 0.80. A
+  // constant is used rather than the per-frame extent on purpose: a box that
+  // tracked the animation would shove every icon beside it back and forth
+  // five times a second.
+  readonly property real paintedWidth: catWidth * 0.80
 
   // Padding, not decoration: the cat's silhouette is ~2x wider than a glyph, so
   // the same slack a glyph gets inside iconSlot leaves the cat looking wedged
-  // against its neighbours. Measured edge-to-edge, this brings the gap to the
-  // next icon in line with the ~45px the other bar icons sit at.
-  implicitWidth: catWidth + Style.space(16)
+  // against its neighbours.
+  //
+  // Two behaviours, picked by whether the theme sets [bar] icon-gap:
+  //
+  //   unset (0) -- every theme but macos-light: the hand-measured
+  //     Style.space(16) this has always used, so nothing changes for them.
+  //   set -- take the same padding the glyph icons take, measured from the
+  //     same thing (painted ink), so the gap matches by construction.
+  implicitWidth: Style.bar.iconGap > 0
+               ? Math.round(paintedWidth + Style.bar.iconGap)
+               : catWidth + Style.space(16)
   implicitHeight: Style.bar.iconSlot
 
   Timer {

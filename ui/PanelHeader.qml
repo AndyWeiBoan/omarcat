@@ -10,6 +10,7 @@
 import QtQuick
 import qs.Commons
 import qs.Ui
+import "../Model.js" as Model
 
 Item {
   id: root
@@ -33,8 +34,8 @@ Item {
     anchors.left: parent.left
     anchors.verticalCenter: parent.verticalCenter
     text: "‹"
-    color: backArea.containsMouse ? Color.accent : root.foreground
-    opacity: 0.9
+    color: Color.accent
+    opacity: backArea.containsMouse ? 1 : 0.85
     font.family: root.fontFamily
     font.pixelSize: Style.font.heading
     font.bold: true
@@ -48,11 +49,15 @@ Item {
     anchors.right: gear.left
     anchors.rightMargin: Style.space(10)
     anchors.verticalCenter: parent.verticalCenter
+    // The title is where you are, not something to click. Only the chevron
+    // beside it is blue, and only because it is the control.
     text: root.title
-    color: root.canGoBack && backArea.containsMouse ? Color.accent : Color.accent
+    color: root.canGoBack && backArea.containsMouse
+      ? Color.accent
+      : Util.alpha(root.foreground, Model.INK.label)
     font.family: root.fontFamily
     font.pixelSize: Style.font.subtitle
-    font.bold: true
+    font.weight: Font.DemiBold
     elide: Text.ElideRight
   }
 
@@ -70,26 +75,40 @@ Item {
     onClicked: root.backRequested()
   }
 
-  // A labelled button, not a bare cog. An icon alone is a guess -- this one is
-  // the only way into settings now that the tab strip is gone, so it says what
-  // it is.
-  Button {
+  // A bare glyph in the accent, the way a macOS popover puts its one auxiliary
+  // control in the title bar. It used to be a bordered "Settings" button, which
+  // at 28pt tall was the heaviest thing on every page -- including the pages
+  // whose whole job is to show a number.
+  Item {
     id: gear
     anchors.right: parent.right
     anchors.verticalCenter: parent.verticalCenter
-    // The Nerd Font cog, the same glyph Omarchy uses for settings elsewhere --
-    // not the "⚙" emoji, which the font stack renders in colour and which
-    // therefore looks nothing like the rest of the panel.
-    //
-    // Deliberately drawn with the font ALIAS rather than a resolved family:
-    // this machine's monospace is Comic Code, which has no such glyph, and it
-    // is fontconfig's per-glyph fallback that finds JetBrainsMono Nerd Font.
-    // Binding to the concrete family would produce tofu.
-    iconText: "󰒓"
-    text: "Settings"
-    bordered: true
-    foreground: root.foreground
-    fontFamily: root.fontFamily
-    onClicked: root.settingsRequested()
+    width: gearGlyph.implicitWidth + Style.space(8)
+    height: Math.max(gearGlyph.implicitHeight, Style.space(22))
+
+    Text {
+      id: gearGlyph
+      anchors.centerIn: parent
+      textFormat: Text.PlainText
+      // The Nerd Font cog, the same glyph Omarchy uses for settings elsewhere.
+      // Drawn with the font ALIAS rather than a resolved family: this machine's
+      // monospace is Comic Code, which has no such glyph, and it is fontconfig's
+      // per-glyph fallback that finds JetBrainsMono Nerd Font. Binding to the
+      // concrete family would produce tofu.
+      text: "󰒓"
+      color: Color.accent
+      opacity: gearArea.containsMouse ? 1 : 0.85
+      font.family: root.fontFamily
+      font.pixelSize: Style.font.subtitle
+    }
+
+    MouseArea {
+      id: gearArea
+      anchors.fill: parent
+      hoverEnabled: true
+      cursorShape: Qt.PointingHandCursor
+      onClicked: root.settingsRequested()
+    }
   }
+
 }

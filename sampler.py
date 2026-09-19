@@ -294,11 +294,36 @@ class CpuSampler:
         for i in range(threads):
             core = read_text(f"/sys/devices/system/cpu/cpu{i}/topology/core_id")
             pkg = read_text(f"/sys/devices/system/cpu/cpu{i}/topology/physical_package_id")
+            # The cluster too. On arm64 core_id is unique only within its
+            # cluster: an Apple part numbers its two efficiency cores 0 and 1,
+            # then starts again at 0 in each performance cluster, so keying on
+            # (package, core) alone folds eight cores into three.
+            cluster = read_text(f"/sys/devices/system/cpu/cpu{i}/topology/cluster_id")
             if core != "":
-                core_ids.add((pkg, core))
+                core_ids.add((pkg, cluster, core))
         cores = len(core_ids) or threads
+        # Intel lists its efficiency cores in one node. Everywhere else the
+        # scheduler's per-cpu capacity is the portable answer: where the
+        # capacities differ, anything under the top one is an efficiency core.
         efficiency = self._cpu_list(read_text("/sys/devices/cpu_atom/cpus"))
-        max_khz = read_int("/sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_max_freq")
+        if not efficiency:
+            caps = [
+                read_int(f"/sys/devices/system/cpu/cpu{i}/cpu_capacity")
+                for i in range(threads)
+            ]
+            known = [c for c in caps if c]
+            if known:
+                top = max(known)
+                efficiency = [i for i, c in enumerate(caps) if c and c < top]
+        # The fastest cluster, not cpu0: where clusters differ cpu0 is an
+        # efficiency core, and its ceiling understates the part by a third.
+        max_khz = max(
+            (
+                read_int(f"/sys/devices/system/cpu/cpu{i}/cpufreq/cpuinfo_max_freq") or 0
+                for i in range(threads)
+            ),
+            default=0,
+        )
         model = re.sub(r"\s+", " ", model)
         model = bounded_text(re.sub(r"\((R|TM)\)", "", model).replace("  ", " ").strip())
         return {

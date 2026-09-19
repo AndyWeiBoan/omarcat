@@ -1,8 +1,15 @@
 import QtQuick
 import qs.Commons
+import "../Model.js" as Model
 
-// Grouped surface, the iStat "card": a faint fill with a hairline border
-// that groups one topic (a graph and its legend, a list, a set of rings).
+// The grouped surface macOS builds a settings or stats list out of: a plain
+// rounded fill holding rows, with the group's name set ABOVE it rather than
+// inside (see SectionTitle).
+//
+// Faint border, not a drawn outline. A grouped list in macOS is separated from
+// its background by tone and a shadow, not by a line; the hairline stays only
+// so the group is still legible on a theme whose popup surface is the same
+// value as this fill.
 Rectangle {
   id: root
 
@@ -14,9 +21,9 @@ Rectangle {
   width: parent ? parent.width : implicitWidth
   implicitHeight: column.implicitHeight + padding * 2
   radius: Style.cornerRadius
-  color: Util.alpha(foreground, 0.035)
+  color: Util.alpha(foreground, Model.INK.groupFill)
   border.width: 1
-  border.color: Util.alpha(foreground, 0.09)
+  border.color: Util.alpha(foreground, Model.INK.groupBorder)
 
   Column {
     id: column

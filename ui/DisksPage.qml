@@ -244,10 +244,12 @@ Column {
         anchors.left: parent.left
         anchors.baseline: diskValue.baseline
         text: root.activityDisk || "Storage"
-        color: Color.accent
+        // The name of the thing, not a link. See Model.INK -- the accent is
+        // kept for the chevron, the "Show all" link and the selected segment.
+        color: Util.alpha(root.foreground, Model.INK.label)
         font.family: root.fontFamily
-        font.pixelSize: Style.font.subtitle
-        font.bold: true
+        font.pixelSize: Style.font.body
+        font.weight: Font.DemiBold
       }
 
       Text {
@@ -259,7 +261,7 @@ Column {
         color: root.foreground
         font.family: root.fontFamily
         font.pixelSize: Style.font.display
-        font.bold: true
+        font.weight: Font.Normal
       }
     }
 
@@ -383,8 +385,11 @@ Column {
         anchors.right: parent.right
         anchors.verticalCenter: parent.verticalCenter
         text: storage.scanning ? "Scanning…" : (storage.scanned ? "Rescan" : "Scan")
-        color: scanArea.containsMouse && !storage.scanning ? Color.accent : root.foreground
-        opacity: storage.scanning ? 0.5 : 0.75
+        // A link, like "Show all" on the process lists: blue at rest, because
+        // blue is what says "you can act on this". While it is running it is
+        // not a link any more, so it drops to the ordinary ink.
+        color: storage.scanning ? root.foreground : Color.accent
+        opacity: storage.scanning ? 0.5 : (scanArea.containsMouse ? 1 : 0.85)
         font.family: root.fontFamily
         font.pixelSize: Style.font.caption
 

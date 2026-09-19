@@ -20,6 +20,31 @@ var MODULES = [
   { id: "settings", icon: "󰒓", short: "SET", label: "Settings", page: "SettingsPage.qml", graph: false }
 ]
 
+// Apple's ink levels, as alphas over the panel's own text colour. These are
+// AppKit's semantic label colours, read straight off the Mac:
+//
+//     labelColor            black @ 0.847
+//     secondaryLabelColor   black @ 0.498
+//     tertiaryLabelColor    black @ 0.259
+//     separatorColor        black @ 0.098
+//
+// Expressed as alphas rather than colours so they work in a dark theme too,
+// where AppKit uses the same numbers over white.
+//
+// **The accent is not on this list.** In macOS blue means interactive or
+// selected; it is never a heading. Titles, section names and row labels all
+// come from here, and the accent is kept for the back chevron, links, the
+// selected segment and a graph's primary series.
+var INK = {
+  label: 0.85,
+  secondary: 0.50,
+  tertiary: 0.26,
+  separator: 0.10,
+  // A grouped list's own fill, over the popup surface.
+  groupFill: 0.05,
+  groupBorder: 0.07
+}
+
 var PANEL_TABS = ["overview", "cpu", "memory", "disks", "network"]
 
 // Every user-tunable key with its default. Flat keys keep the entry in
@@ -44,7 +69,7 @@ var RUNNERS = ["cat", "catalpha", "dog", "dancer", "sway"]
 // cat spans the whole box, the dancer about a third of it -- and inflating the
 // height was compensating for that in the wrong dimension, which just made the
 // figures taller than every other icon in the bar.
-var RUNNER_SCALE = { cat: 1.10, catalpha: 1.05, dog: 1.06, dancer: 1.06, sway: 1.07 }
+var RUNNER_SCALE = { cat: 1.10, catalpha: 0.65, dog: 1.06, dancer: 1.06, sway: 1.07 }
 
 function runnerScale(name) {
   var v = RUNNER_SCALE[name]

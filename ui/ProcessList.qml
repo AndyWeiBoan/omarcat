@@ -73,12 +73,13 @@ Column {
       anchors.left: titleText.right
       anchors.leftMargin: Style.space(10)
       anchors.baseline: titleText.baseline
+      // A link, so it wears the accent -- the one thing on this line you can
+      // act on. The group's name beside it is grey for exactly the same reason.
       text: root.expanded ? "Show less" : "Show all"
-      color: root.foreground
-      opacity: expandMouse.containsMouse ? 0.9 : 0.5
+      color: Color.accent
+      opacity: expandMouse.containsMouse ? 1 : 0.85
       font.family: root.fontFamily
       font.pixelSize: Style.font.caption
-      font.bold: true
 
       Behavior on opacity { NumberAnimation { duration: 90 } }
 
@@ -104,12 +105,14 @@ Column {
           textFormat: Text.PlainText
           width: root.columnWidth
           horizontalAlignment: Text.AlignRight
+          // Column headers sit at the same weight and ink as a group's name,
+          // because that is what they are.
           text: modelData.title || ""
           color: root.foreground
-          opacity: 0.5
+          opacity: Model.INK.secondary
           font.family: root.fontFamily
           font.pixelSize: Style.font.caption
-          font.bold: true
+          font.weight: Font.DemiBold
         }
       }
     }

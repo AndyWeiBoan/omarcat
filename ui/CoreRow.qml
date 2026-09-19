@@ -1,18 +1,27 @@
-// One physical core: how hard it is working and how hot that is making it.
+// One physical core, on one line: how hard it is working, and how hot that is
+// making it.
 //
 // Physical, not logical. The sampler measures threads, but a temperature sensor
 // belongs to a core -- two hyperthreads report one temperature between them --
 // so a per-thread row would have to print the same degrees twice and imply a
 // precision the hardware does not have.
 //
-// Each bar is labelled inline rather than by colour, because colour here is
-// already spoken for: it carries severity, and a bar that is red because it is
-// hot must not be confused with a bar that is red because it is busy.
+// **One line, not two.** It used to set the core's name on its own line and
+// then a labelled bar underneath, so eight cores read as sixteen rows and the
+// word "Load" was repeated eight times to say what the whole group already
+// said. On a machine with no per-core sensor -- which is most of them -- that
+// label was the only thing the second line carried.
+//
+// The temperature rides as a suffix after the percentage rather than as a
+// second bar. Colour here is already spoken for: it carries severity, and a bar
+// that is red because it is hot must not be confused with one that is red
+// because it is busy.
 
 import QtQuick
 import qs.Commons
+import "../Model.js" as Model
 
-Column {
+Item {
   id: root
 
   property string title: ""
@@ -28,90 +37,86 @@ Column {
   property color dangerColor: Color.urgent
   property string fontFamily: Style.font.family
 
+  // Every row but the first draws the hairline above it.
+  property bool showSeparator: true
+
   readonly property bool hasTemperature: root.temperature >= 0
+  readonly property real hInset: Style.space(12)
 
-  spacing: Style.space(4)
+  width: parent ? parent.width : implicitWidth
+  implicitHeight: Style.space(26)
+  height: implicitHeight
 
-  Text {
-    textFormat: Text.PlainText
-    text: root.title
-    color: root.foreground
-    opacity: 0.75
-    font.family: root.fontFamily
-    font.pixelSize: Style.font.caption
+  Hairline {
+    visible: root.showSeparator
+    foreground: root.foreground
+    inset: root.hInset
   }
 
-  Repeater {
-    model: [
-      {
-        label: "Load",
-        // A core at 100% is doing its job, not failing -- so the thresholds sit
-        // higher than they would for a resource you can run out of.
-        value: root.usage,
-        text: Math.round(root.usage) + "%",
-        warnAt: 80,
-        dangerAt: 95,
-        show: true
-      },
-      {
-        label: "Temp",
-        // Scaled against the sensor's own limit where the hardware reports one,
-        // so the bar means "how close to throttling" rather than "how close to
-        // an arbitrary round number".
-        value: root.hasTemperature ? root.temperature / Math.max(1, root.temperatureCeiling) * 100 : 0,
-        text: root.temperatureText,
-        warnAt: 80,
-        dangerAt: 92,
-        show: root.hasTemperature
-      }
-    ]
+  Text {
+    id: label
+    textFormat: Text.PlainText
+    anchors.left: parent.left
+    anchors.leftMargin: root.hInset
+    anchors.verticalCenter: parent.verticalCenter
+    text: root.title
+    color: Util.alpha(root.foreground, Model.INK.label)
+    font.family: root.fontFamily
+    font.pixelSize: Style.font.bodySmall
+    elide: Text.ElideRight
+    width: Math.min(implicitWidth, root.width * 0.34)
+  }
 
-    delegate: Item {
-      id: line
-      required property var modelData
-      width: root.width
-      visible: line.modelData.show
-      height: visible ? Math.max(label.implicitHeight, bar.height, value.implicitHeight) : 0
+  Text {
+    id: temp
+    textFormat: Text.PlainText
+    visible: root.hasTemperature && root.temperatureText !== ""
+    anchors.right: parent.right
+    anchors.rightMargin: root.hInset
+    anchors.verticalCenter: parent.verticalCenter
+    text: root.temperatureText
+    color: Util.alpha(root.foreground, Model.INK.tertiary)
+    font.family: root.fontFamily
+    font.pixelSize: Style.font.bodySmall
+  }
 
-      Text {
-        id: label
-        textFormat: Text.PlainText
-        anchors.left: parent.left
-        anchors.verticalCenter: parent.verticalCenter
-        text: line.modelData.label
-        color: root.foreground
-        opacity: 0.45
-        font.family: root.fontFamily
-        font.pixelSize: Style.font.caption
-      }
+  Text {
+    id: value
+    textFormat: Text.PlainText
+    anchors.right: temp.visible ? temp.left : parent.right
+    anchors.rightMargin: temp.visible ? Style.space(8) : root.hInset
+    anchors.verticalCenter: parent.verticalCenter
+    // A fixed slot so eight percentages line up on their right edge instead of
+    // stepping in and out with the width of "9%" against "100%".
+    horizontalAlignment: Text.AlignRight
+    width: metrics.advanceWidth
+    text: Math.round(root.usage) + "%"
+    color: Util.alpha(root.foreground, Model.INK.secondary)
+    font.family: root.fontFamily
+    font.pixelSize: Style.font.bodySmall
+  }
 
-      Text {
-        id: value
-        textFormat: Text.PlainText
-        anchors.right: parent.right
-        anchors.verticalCenter: parent.verticalCenter
-        text: line.modelData.text
-        color: root.foreground
-        opacity: 0.8
-        font.family: root.fontFamily
-        font.pixelSize: Style.font.caption
-      }
+  TextMetrics {
+    id: metrics
+    font.family: root.fontFamily
+    font.pixelSize: Style.font.bodySmall
+    text: "100%"
+  }
 
-      LevelBar {
-        id: bar
-        anchors.left: label.right
-        anchors.right: value.left
-        anchors.leftMargin: Style.space(6)
-        anchors.rightMargin: Style.space(6)
-        anchors.verticalCenter: parent.verticalCenter
-        value: line.modelData.value
-        warnAt: line.modelData.warnAt
-        dangerAt: line.modelData.dangerAt
-        foreground: root.foreground
-        normalColor: root.normalColor
-        warnColor: root.warnColor
-        dangerColor: root.dangerColor
-      }
-    }
+  LevelBar {
+    anchors.left: label.right
+    anchors.right: value.left
+    anchors.leftMargin: Style.space(10)
+    anchors.rightMargin: Style.space(10)
+    anchors.verticalCenter: parent.verticalCenter
+    // A core at 100% is doing its job, not failing -- so the thresholds sit
+    // higher than they would for a resource you can run out of.
+    value: root.usage
+    warnAt: 80
+    dangerAt: 95
+    foreground: root.foreground
+    normalColor: root.normalColor
+    warnColor: root.warnColor
+    dangerColor: root.dangerColor
   }
 }

@@ -1,5 +1,6 @@
 import QtQuick
 import qs.Commons
+import "../Model.js" as Model
 
 // Headline figure with a caption under it: "47.1 MB/s" over "Read".
 Column {
@@ -27,8 +28,10 @@ Column {
       unit: root.unit
       foreground: root.foreground
       fontFamily: root.fontFamily
-      valueSize: Style.font.heading
-      unitSize: Style.font.bodySmall
+      valueSize: Style.font.display
+      unitSize: Style.font.body
+      bold: false
+      unitOpacity: Model.INK.secondary
     }
   }
 
@@ -38,7 +41,7 @@ Column {
     horizontalAlignment: root.align
     text: root.label
     color: root.foreground
-    opacity: 0.55
+    opacity: Model.INK.secondary
     font.family: root.fontFamily
     font.pixelSize: Style.font.caption
     elide: Text.ElideRight

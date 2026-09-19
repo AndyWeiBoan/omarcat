@@ -217,10 +217,12 @@ Column {
         anchors.left: parent.left
         anchors.baseline: signalValue.baseline
         text: "Signal"
-        color: Color.accent
+        // The name of the thing, not a link. See Model.INK -- the accent is
+        // kept for the chevron, the "Show all" link and the selected segment.
+        color: Util.alpha(root.foreground, Model.INK.label)
         font.family: root.fontFamily
-        font.pixelSize: Style.font.subtitle
-        font.bold: true
+        font.pixelSize: Style.font.body
+        font.weight: Font.DemiBold
       }
 
       Text {
@@ -232,7 +234,7 @@ Column {
         color: root.foreground
         font.family: root.fontFamily
         font.pixelSize: Style.font.display
-        font.bold: true
+        font.weight: Font.Normal
       }
     }
 

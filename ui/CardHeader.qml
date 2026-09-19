@@ -1,8 +1,14 @@
 import QtQuick
 import qs.Commons
+import "../Model.js" as Model
 
-// Card title line: name in the accent on the left, a quiet detail on the
-// right ("CPU" ......... "4.85 GHz, 49°").
+// Card title line: the name on the left, a quiet detail on the right
+// ("CPU" ......... "4.85 GHz, 49°").
+//
+// The name is the panel's own text colour at label strength, not the accent.
+// In macOS blue is for things you can act on; a card that titles itself in
+// blue reads as a link and, when every card does it, nothing is emphasised at
+// all. See Model.INK.
 Item {
   id: root
 
@@ -27,10 +33,10 @@ Item {
     anchors.left: parent.left
     anchors.verticalCenter: parent.verticalCenter
     text: root.title
-    color: Color.accent
+    color: Util.alpha(root.foreground, Model.INK.label)
     font.family: root.fontFamily
-    font.pixelSize: Style.font.subtitle
-    font.bold: true
+    font.pixelSize: Style.font.body
+    font.weight: Font.DemiBold
     elide: Text.ElideRight
     width: Math.min(implicitWidth, parent.width - detailText.width - Style.space(8))
   }
@@ -55,8 +61,7 @@ Item {
     anchors.right: parent.right
     anchors.verticalCenter: parent.verticalCenter
     text: root.detail
-    color: root.foreground
-    opacity: 0.6
+    color: Util.alpha(root.foreground, Model.INK.secondary)
     font.family: root.fontFamily
     font.pixelSize: Style.font.bodySmall
   }
