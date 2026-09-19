@@ -1,5 +1,6 @@
 import QtQuick
 import Quickshell
+import Quickshell.Io
 import qs.Commons
 import qs.Ui
 import "../Model.js" as Model
@@ -90,6 +91,50 @@ Column {
   }
 
   readonly property real volumesPercent: root.volumesUsed / root.volumesTotal * 100
+
+  // The disk the mounted volumes live on, and how big it really is.
+  //
+  // **The sampler only knows about MOUNTED volumes**, and on this machine that
+  // is 227 of the drive's 466 GiB -- the rest is another operating system's
+  // partitions, which Linux can see the existence of and nothing else. So a
+  // card headed with the device name and a percentage was claiming to speak for
+  // the whole drive while totalling less than half of it.
+  //
+  // The percentage is unchanged: it is still how full the volumes we can see
+  // are, which is the number anyone opening this page wants. What changed is
+  // that the card now says so.
+  //
+  // Capacity comes from sysfs because nothing in the sampler's payload carries
+  // it -- `volumes[]` has each volume's own size and the disk it belongs to,
+  // and that is all.
+  readonly property string volumesDisk: {
+    for (let i = 0; i < root.volumes.length; i++) {
+      const d = String(root.volumes[i].disk || "");
+      if (d) return d;
+    }
+    return root.activityDisk;
+  }
+
+  property real deviceBytes: 0
+
+  FileView {
+    // Sector count, 512 bytes each. Absent for anything that is not a whole
+    // block device, which is why deviceBytes falls back to 0 rather than
+    // failing the card.
+    path: root.volumesDisk ? "/sys/block/" + root.volumesDisk + "/size" : ""
+    onLoaded: {
+      const sectors = Number(String(text()).trim());
+      root.deviceBytes = isFinite(sectors) ? sectors * 512 : 0;
+    }
+    onLoadFailed: root.deviceBytes = 0
+  }
+
+  readonly property string volumesDetail: {
+    const mounted = Model.bytesText(root.volumesTotal);
+    if (root.deviceBytes > root.volumesTotal * 1.02)
+      return root.volumesDisk + "  \u00b7  " + mounted + " of " + Model.bytesText(root.deviceBytes);
+    return root.volumesDisk + "  \u00b7  " + mounted;
+  }
 
   readonly property var volumeColors: [root.s1, root.s2, root.warn]
 
@@ -246,35 +291,14 @@ Column {
     foreground: root.foreground
     spacing: Style.space(10)
 
-    Item {
-      width: parent.width
-      implicitHeight: Math.max(diskTitle.implicitHeight, diskValue.implicitHeight)
-
-      Text {
-        id: diskTitle
-        textFormat: Text.PlainText
-        anchors.left: parent.left
-        anchors.baseline: diskValue.baseline
-        text: root.activityDisk || "Storage"
-        // The name of the thing, not a link. See Model.INK -- the accent is
-        // kept for the chevron, the "Show all" link and the selected segment.
-        color: Util.alpha(root.foreground, Model.INK.label)
-        font.family: root.fontFamily
-        font.pixelSize: Style.font.body
-        font.weight: Font.DemiBold
-      }
-
-      Text {
-        id: diskValue
-        textFormat: Text.PlainText
-        anchors.right: parent.right
-        anchors.top: parent.top
-        text: Model.percentText(root.volumesPercent)
-        color: root.foreground
-        font.family: root.fontFamily
-        font.pixelSize: Style.font.display
-        font.weight: Font.Normal
-      }
+    CardHeader {
+      title: "Mounted volumes"
+      detail: root.volumesDetail
+      value: Model.percentText(root.volumesPercent).replace("%", "")
+      unit: "%"
+      inlineDetail: true
+      foreground: root.foreground
+      fontFamily: root.fontFamily
     }
 
     StackBar {
