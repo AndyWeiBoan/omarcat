@@ -25,7 +25,7 @@ Item {
   signal backRequested()
   signal settingsRequested()
 
-  implicitHeight: Math.max(titleText.implicitHeight, gear.implicitHeight, Style.space(22))
+  implicitHeight: Math.max(titleText.implicitHeight, Style.space(22))
 
   Text {
     id: backChevron
@@ -46,8 +46,7 @@ Item {
     textFormat: Text.PlainText
     anchors.left: root.canGoBack ? backChevron.right : parent.left
     anchors.leftMargin: root.canGoBack ? Style.space(8) : 0
-    anchors.right: gear.left
-    anchors.rightMargin: Style.space(10)
+    anchors.right: parent.right
     anchors.verticalCenter: parent.verticalCenter
     // The title is where you are, not something to click. Only the chevron
     // beside it is blue, and only because it is the control.
@@ -67,7 +66,7 @@ Item {
     id: backArea
     visible: root.canGoBack
     anchors.left: parent.left
-    anchors.right: gear.left
+    anchors.right: titleText.right
     anchors.top: parent.top
     anchors.bottom: parent.bottom
     hoverEnabled: true
@@ -75,40 +74,12 @@ Item {
     onClicked: root.backRequested()
   }
 
-  // A bare glyph in the accent, the way a macOS popover puts its one auxiliary
-  // control in the title bar. It used to be a bordered "Settings" button, which
-  // at 28pt tall was the heaviest thing on every page -- including the pages
-  // whose whole job is to show a number.
-  Item {
-    id: gear
-    anchors.right: parent.right
-    anchors.verticalCenter: parent.verticalCenter
-    width: gearGlyph.implicitWidth + Style.space(8)
-    height: Math.max(gearGlyph.implicitHeight, Style.space(22))
-
-    Text {
-      id: gearGlyph
-      anchors.centerIn: parent
-      textFormat: Text.PlainText
-      // The Nerd Font cog, the same glyph Omarchy uses for settings elsewhere.
-      // Drawn with the font ALIAS rather than a resolved family: this machine's
-      // monospace is Comic Code, which has no such glyph, and it is fontconfig's
-      // per-glyph fallback that finds JetBrainsMono Nerd Font. Binding to the
-      // concrete family would produce tofu.
-      text: "󰒓"
-      color: Color.accent
-      opacity: gearArea.containsMouse ? 1 : 0.85
-      font.family: root.fontFamily
-      font.pixelSize: Style.font.subtitle
-    }
-
-    MouseArea {
-      id: gearArea
-      anchors.fill: parent
-      hoverEnabled: true
-      cursorShape: Qt.PointingHandCursor
-      onClicked: root.settingsRequested()
-    }
-  }
-
+  // **No settings control up here.** A gear in the corner of a popover is not
+  // a macOS pattern -- it is a Windows and GNOME one. Where macOS has to hand
+  // you off to a settings screen it puts a row at the BOTTOM of the list and
+  // spells it out: Control Center's Wi-Fi pane ends with "Wi-Fi Settings...",
+  // not with an icon you have to guess at.
+  //
+  // So the way in is the last row of the Overview list. `settingsRequested`
+  // stays for callers that still connect to it; nothing here emits it now.
 }

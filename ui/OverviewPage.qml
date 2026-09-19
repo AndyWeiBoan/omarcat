@@ -318,5 +318,22 @@ Column {
         }
       }
 
+
+    // The way into Settings, spelled out, at the bottom of the list -- which is
+    // where macOS puts it ("Wi-Fi Settings..." at the foot of Control Center's
+    // Wi-Fi pane) rather than as a gear in the corner of the title bar. No
+    // badge, like the reference, but indented to the same left edge as the
+    // rows above it so the list keeps one column.
+    OverviewRow {
+      width: parent.width
+      reserveIcon: true
+      title: "Settings"
+      target: "settings"
+      onDrillRequested: function(id) { if (root.host) root.host.showTab(id) }
+      showBar: false
+      foreground: root.foreground
+      fontFamily: root.fontFamily
+    }
+
   }
 }

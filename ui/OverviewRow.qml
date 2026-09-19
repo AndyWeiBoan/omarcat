@@ -92,7 +92,11 @@ Item {
   readonly property real badgeSize: Style.space(24)
   // Everything on the row lines up past the badge, the way an indented list
   // does -- including the bar, so the bars start on one edge down the column.
-  readonly property real contentInset: icon === "" ? hInset : hInset + badgeSize + Style.space(10)
+  // A row with no badge still lines up with the ones that have one, so the
+  // list keeps a single left edge.
+  property bool reserveIcon: false
+  readonly property real contentInset: (icon === "" && !reserveIcon)
+    ? hInset : hInset + badgeSize + Style.space(10)
 
   width: parent ? parent.width : implicitWidth
   implicitHeight: body.implicitHeight + vPad * 2
