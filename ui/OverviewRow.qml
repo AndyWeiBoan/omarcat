@@ -28,6 +28,9 @@ Item {
   // finds the word "Battery". See Model.ROW_BADGE.
   property string icon: ""
   property color iconTint: "#8e8e93"
+  // The badge may be drawn from a different family than the row's text -- SF
+  // Symbols live in SF Pro Display, the fallback glyphs in a Nerd Font.
+  property string iconFont: ""
   // The hardware this row is about -- the CPU part, the disk, the wifi chip.
   // Quiet and directly under the title, because it answers "which one is this"
   // and never changes; the number beside it is the thing being watched.
@@ -129,7 +132,7 @@ Item {
       textFormat: Text.PlainText
       text: root.icon
       color: "white"
-      font.family: root.fontFamily
+      font.family: root.iconFont !== "" ? root.iconFont : root.fontFamily
       font.pixelSize: Math.round(root.badgeSize * 0.62)
     }
   }

@@ -133,8 +133,9 @@ Column {
         showSeparator: false
         width: parent.width
         title: "CPU"
-        icon: Model.rowBadge("cpu").glyph
-        iconTint: Model.rowBadge("cpu").tint
+        icon: root.host ? root.host.badgeFor("cpu").glyph : Model.rowBadge("cpu").glyph
+        iconTint: root.host ? root.host.badgeFor("cpu").tint : Model.rowBadge("cpu").tint
+        iconFont: root.host ? root.host.badgeFor("cpu").family : root.fontFamily
         subtitle: hw.modelOf("cpu")
         target: "cpu"
         onDrillRequested: function(id) { if (root.host) root.host.showTab(id) }
@@ -173,8 +174,9 @@ Column {
         visible: root.fans.length > 0
         width: parent.width
         title: "Fans"
-        icon: Model.rowBadge("fans").glyph
-        iconTint: Model.rowBadge("fans").tint
+        icon: root.host ? root.host.badgeFor("fans").glyph : Model.rowBadge("fans").glyph
+        iconTint: root.host ? root.host.badgeFor("fans").tint : Model.rowBadge("fans").tint
+        iconFont: root.host ? root.host.badgeFor("fans").family : root.fontFamily
         value: Math.round(root.peakRpm) + " rpm"
         // No bar: a fan has no capacity to be a fraction of. Its maximum is
         // undocumented, varies per model, and scaling against the fastest speed
@@ -195,8 +197,9 @@ Column {
     OverviewRow {
         width: parent.width
         title: "Memory"
-        icon: Model.rowBadge("memory").glyph
-        iconTint: Model.rowBadge("memory").tint
+        icon: root.host ? root.host.badgeFor("memory").glyph : Model.rowBadge("memory").glyph
+        iconTint: root.host ? root.host.badgeFor("memory").tint : Model.rowBadge("memory").tint
+        iconFont: root.host ? root.host.badgeFor("memory").family : root.fontFamily
         subtitle: hw.modelOf("memory")
         target: "memory"
         onDrillRequested: function(id) { if (root.host) root.host.showTab(id) }
@@ -218,8 +221,9 @@ Column {
         visible: root.rootVolume !== null
         width: parent.width
         title: "Disk"
-        icon: Model.rowBadge("disks").glyph
-        iconTint: Model.rowBadge("disks").tint
+        icon: root.host ? root.host.badgeFor("disks").glyph : Model.rowBadge("disks").glyph
+        iconTint: root.host ? root.host.badgeFor("disks").tint : Model.rowBadge("disks").tint
+        iconFont: root.host ? root.host.badgeFor("disks").family : root.fontFamily
         subtitle: hw.modelOf("disk")
         target: "disks"
         onDrillRequested: function(id) { if (root.host) root.host.showTab(id) }
@@ -251,8 +255,9 @@ Column {
         visible: root.hasBattery
         width: parent.width
         title: "Battery"
-        icon: Model.rowBadge("battery").glyph
-        iconTint: Model.rowBadge("battery").tint
+        icon: root.host ? root.host.badgeFor("battery").glyph : Model.rowBadge("battery").glyph
+        iconTint: root.host ? root.host.badgeFor("battery").tint : Model.rowBadge("battery").tint
+        iconFont: root.host ? root.host.badgeFor("battery").family : root.fontFamily
         subtitle: hw.modelOf("battery")
         value: Model.percentText(Model.num(root.bat.percent))
         level: Model.num(root.bat.percent)
@@ -298,8 +303,9 @@ Column {
     OverviewRow {
         width: parent.width
         title: "Network"
-        icon: Model.rowBadge("network").glyph
-        iconTint: Model.rowBadge("network").tint
+        icon: root.host ? root.host.badgeFor("network").glyph : Model.rowBadge("network").glyph
+        iconTint: root.host ? root.host.badgeFor("network").tint : Model.rowBadge("network").tint
+        iconFont: root.host ? root.host.badgeFor("network").family : root.fontFamily
         subtitle: hw.modelOf("network")
         target: "network"
         onDrillRequested: function(id) { if (root.host) root.host.showTab(id) }

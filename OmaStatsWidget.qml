@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import Quickshell
+import Quickshell.Io
 import qs.Commons
 import qs.Ui
 import "Model.js" as Model
@@ -34,6 +35,67 @@ Panel {
   // separate plugin so there is exactly one bar entry: the panel then anchors
   // to the cat, and its indicator sits under the cat instead of under a hidden
   // placeholder widget.
+
+  // ------------------------------------------------------------ theme icons
+  // A theme may replace the row badges by shipping `omarcat.json` in its own
+  // directory -- the same route the dock's dock.json and the Control Center's
+  // controlcenter.json take, and `omarchy-theme-set` copies the whole theme
+  // directory, so the file simply appears next to colors.toml.
+  //
+  // It exists for one reason: **SF Symbols**. The Nerd Font glyphs the modules
+  // carry are Material Design's, a different drawing tradition -- heavier,
+  // more literal, and carrying detail a 14px badge cannot show (its CPU icon
+  // has the characters "64" inside it). SF Symbols are the macOS set. But they
+  // live in the PUA of a specific build of SF Pro Display, and their codepoints
+  // drift between versions, so they cannot be hardcoded in a plugin that has to
+  // draw on machines that have never heard of that font.
+  //
+  // Codepoints are numbers, not string escapes: this plane is exactly where
+  // editors and JSON tools silently mangle characters.
+  property var themeIcons: ({})
+
+  function loadThemeIcons(raw) {
+    try {
+      var parsed = JSON.parse(String(raw || ""))
+      root.themeIcons = (parsed && typeof parsed === "object") ? parsed : ({})
+    } catch (e) {
+      root.themeIcons = ({})
+    }
+  }
+
+  // {glyph, tint, family}. The theme wins where it has an entry; anything it
+  // says nothing about keeps the Nerd Font glyph and the bar's own font, so a
+  // theme with no file is untouched by any of this.
+  function badgeFor(id) {
+    var fallback = Model.rowBadge(id)
+    var table = root.themeIcons && root.themeIcons.badges ? root.themeIcons.badges : null
+    var entry = table ? table[id] : null
+    if (!entry || !isFinite(Number(entry.codepoint)))
+      return { glyph: fallback.glyph, tint: fallback.tint, family: root.fontFamily }
+    return {
+      glyph: String.fromCodePoint(Number(entry.codepoint)),
+      tint: entry.tint || fallback.tint,
+      family: String(root.themeIcons.badgeFont || root.fontFamily)
+    }
+  }
+
+  // A theme switch does not change this path, and Color's own FileViews are
+  // startup-only -- runtime switches push the payload through shell IPC -- so
+  // without this the panel would keep the previous theme's badges until the
+  // next restart. Watching the palette the IPC path writes is the available
+  // signal; two themes would have to agree on all four to be missed.
+  readonly property string themeStamp: [Color.background, Color.foreground,
+                                        Color.accent, Color.popups.background].join("|")
+  onThemeStampChanged: themeIconFile.reload()
+
+  FileView {
+    id: themeIconFile
+    path: Color.currentThemePath + "/omarcat.json"
+    watchChanges: true
+    onFileChanged: reload()
+    onLoaded: root.loadThemeIcons(text())
+    onLoadFailed: root.themeIcons = ({})
+  }
 
   readonly property var moduleTabs: Model.panelTabs(hasBattery, setting("tabs", Model.SETTINGS.tabs))
   readonly property var panelTabs: moduleTabs.concat(["settings"])
