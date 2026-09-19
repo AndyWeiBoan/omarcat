@@ -21,7 +21,9 @@ Item {
   property real value: 0
   readonly property real fraction: Math.max(0, Math.min(1, root.value / 100))
 
-  property color normalColor: Color.accent
+  // The panel's ink, not the accent -- see the pages' `barColor`. Callers that
+  // want the old behaviour pass Color.accent explicitly.
+  property color normalColor: Util.alpha(foreground, 0.85)
   property color warnColor: Color.urgent
   property color dangerColor: Color.urgent
   property color foreground: Color.popups.text

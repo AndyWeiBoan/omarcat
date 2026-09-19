@@ -28,6 +28,17 @@ Column {
 
   readonly property var snap: service ? service.snapshot : ({})
   readonly property color s1: service ? service.series1 : Color.accent
+
+  // What a capacity bar is filled with when the reading is unremarkable.
+  //
+  // The panel's own ink, not the accent. Omarchy's first-party widgets draw
+  // their bars in the foreground colour, and a panel that draws them in blue
+  // beside them looks like a different application. Blue stays for the things
+  // you can act on -- chevrons, links, the switch that is on.
+  //
+  // `warnColor` and `dangerColor` are untouched: the bar still changes colour
+  // when the number starts to matter, which is the whole reason it has one.
+  readonly property color barColor: Util.alpha(foreground, Model.INK.label)
   readonly property color warn: service ? service.warn : Color.urgent
   readonly property color danger: service ? service.danger : Color.urgent
 
@@ -144,7 +155,7 @@ Column {
         dangerAt: 90
         foreground: root.foreground
         fontFamily: root.fontFamily
-        normalColor: root.s1
+        normalColor: root.barColor
         warnColor: root.warn
         dangerColor: root.danger
 
@@ -208,7 +219,7 @@ Column {
         dangerAt: 85
         foreground: root.foreground
         fontFamily: root.fontFamily
-        normalColor: root.s1
+        normalColor: root.barColor
         warnColor: root.warn
         dangerColor: root.danger
         detail: Model.pairText(Model.num(root.mem.used), root.memTotal)
@@ -229,7 +240,7 @@ Column {
         dangerAt: 90
         foreground: root.foreground
         fontFamily: root.fontFamily
-        normalColor: root.s1
+        normalColor: root.barColor
         warnColor: root.warn
         dangerColor: root.danger
         // Capacity, not throughput. Read/write rates are transient and live on
@@ -265,7 +276,7 @@ Column {
         forceNormal: root.charging
         foreground: root.foreground
         fontFamily: root.fontFamily
-        normalColor: root.s1
+        normalColor: root.barColor
         warnColor: root.warn
         dangerColor: root.danger
         detail: {

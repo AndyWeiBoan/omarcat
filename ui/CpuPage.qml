@@ -18,6 +18,17 @@ Column {
   readonly property var snap: service ? service.snapshot : ({})
   readonly property var hist: service ? service.history : Model.emptyHistory()
   readonly property color s1: service ? service.series1 : Color.accent
+
+  // What a capacity bar is filled with when the reading is unremarkable.
+  //
+  // The panel's own ink, not the accent. Omarchy's first-party widgets draw
+  // their bars in the foreground colour, and a panel that draws them in blue
+  // beside them looks like a different application. Blue stays for the things
+  // you can act on -- chevrons, links, the switch that is on.
+  //
+  // `warnColor` and `dangerColor` are untouched: the bar still changes colour
+  // when the number starts to matter, which is the whole reason it has one.
+  readonly property color barColor: Util.alpha(foreground, Model.INK.label)
   readonly property color s2: service ? service.series2 : Color.accent
   readonly property color s3: service ? service.tertiary : Color.accent
 
@@ -228,7 +239,7 @@ Column {
             ? Model.tempText(Model.num(root.coreTemps[modelData].value), root.temperatureUnit)
             : ""
           foreground: root.foreground
-          normalColor: root.s1
+          normalColor: root.barColor
           warnColor: root.warn
           dangerColor: root.danger
           fontFamily: root.fontFamily
