@@ -45,39 +45,35 @@ var INK = {
   groupBorder: 0.07
 }
 
-// Overview row badges: a glyph and the colour of the rounded square it sits in.
+// Overview row badges: the glyph at the head of each row.
 //
-// The shape is macOS System Settings': a small filled squircle with a white
-// symbol, one per row. Activity Monitor has no badges at all, so this is the
-// Settings convention rather than a copy of any one window.
+// **The badge carries no colour of its own.** A solid saturated squircle with a
+// white symbol is macOS System Settings' idiom, and Apple's own palette was
+// measured out of AppKit and tried here -- blue CPU, purple memory, orange
+// disk, green battery. It looked good and it was wrong twice over. In this
+// panel colour already has a job: LevelBar uses it for severity, blue through
+// red, and CoreRow says so in as many words. And once the colour goes, solid
+// grey behind a white symbol is precisely what System Settings uses to draw a
+// row that is disabled.
 //
-// **Every badge is the same neutral grey, on purpose.** Apple's system palette
-// was measured out of AppKit and tried here first -- blue CPU, purple memory,
-// orange disk, green battery -- and it looked good and was wrong. In this panel
-// colour already has a job: LevelBar uses it for severity, blue through red,
-// and CoreRow says so in as many words ("colour here is already spoken for").
-// A permanently orange disk badge sitting over a blue "nothing is wrong" bar
-// reads as a warning, and a green battery makes a judgement a badge has no
-// business making. The symbols are distinct enough to tell the rows apart by
-// shape; the colour channel stays free to mean one thing.
-//
-// systemGray, read out of AppKit rather than eyeballed.
+// So the badge is the Control Center's off-state treatment instead -- a quiet
+// well with the symbol in the panel's own label ink -- which is already
+// measured and already in use one panel over. The fill and ink live in
+// OverviewRow, written against the foreground so a dark theme inverts cleanly.
 //
 // Glyphs stay numeric (see the README): the font's codepoints sit in a plane
 // that some editing tools silently mangle.
-var BADGE_TINT = "#8e8e93"
-
 var ROW_BADGE = {
-  cpu:     { glyph: String.fromCodePoint(0xf0ee0), tint: BADGE_TINT },
-  memory:  { glyph: String.fromCodePoint(0xf035b), tint: BADGE_TINT },
-  disks:   { glyph: String.fromCodePoint(0xf02ca), tint: BADGE_TINT },
-  battery: { glyph: String.fromCodePoint(0xf0079), tint: BADGE_TINT },
-  network: { glyph: String.fromCodePoint(0xf06f3), tint: BADGE_TINT },
-  fans:    { glyph: String.fromCodePoint(0xf0210), tint: BADGE_TINT }
+  cpu:     { glyph: String.fromCodePoint(0xf0ee0) },
+  memory:  { glyph: String.fromCodePoint(0xf035b) },
+  disks:   { glyph: String.fromCodePoint(0xf02ca) },
+  battery: { glyph: String.fromCodePoint(0xf0079) },
+  network: { glyph: String.fromCodePoint(0xf06f3) },
+  fans:    { glyph: String.fromCodePoint(0xf0210) }
 }
 
 function rowBadge(id) {
-  return ROW_BADGE[id] || { glyph: "", tint: BADGE_TINT }
+  return ROW_BADGE[id] || { glyph: "" }
 }
 
 var PANEL_TABS = ["overview", "cpu", "memory", "disks", "network"]

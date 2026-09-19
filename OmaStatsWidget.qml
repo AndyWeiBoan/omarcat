@@ -63,18 +63,18 @@ Panel {
     }
   }
 
-  // {glyph, tint, family}. The theme wins where it has an entry; anything it
-  // says nothing about keeps the Nerd Font glyph and the bar's own font, so a
-  // theme with no file is untouched by any of this.
+  // {glyph, family}. The theme wins where it has an entry; anything it says
+  // nothing about keeps the Nerd Font glyph and the bar's own font, so a theme
+  // with no file is untouched by any of this. The badge's fill and ink are not
+  // here -- they come from the panel's own foreground, in OverviewRow.
   function badgeFor(id) {
     var fallback = Model.rowBadge(id)
     var table = root.themeIcons && root.themeIcons.badges ? root.themeIcons.badges : null
     var entry = table ? table[id] : null
     if (!entry || !isFinite(Number(entry.codepoint)))
-      return { glyph: fallback.glyph, tint: fallback.tint, family: root.fontFamily }
+      return { glyph: fallback.glyph, family: root.fontFamily }
     return {
       glyph: String.fromCodePoint(Number(entry.codepoint)),
-      tint: entry.tint || fallback.tint,
       family: String(root.themeIcons.badgeFont || root.fontFamily)
     }
   }

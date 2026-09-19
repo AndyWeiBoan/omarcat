@@ -27,7 +27,19 @@ Item {
   // scanned without reading -- the eye finds "the green one" long before it
   // finds the word "Battery". See Model.ROW_BADGE.
   property string icon: ""
-  property color iconTint: "#8e8e93"
+  // Fill and glyph, not "tint and white". A solid saturated square with a white
+  // symbol is System Settings' idiom, and it stops working the moment the
+  // colour goes: solid grey behind white is what System Settings uses for a row
+  // that is DISABLED.
+  //
+  // This is the Control Center's off-state badge instead, which is already
+  // measured and already in this design language: a well at black 0.11 over the
+  // card with the symbol in labelColor, black 0.847. Same treatment, same two
+  // numbers, so the two panels read as one system. Written against the
+  // foreground rather than as literal black so a dark theme gets the same
+  // relationship the other way up.
+  property color iconFill: Util.alpha(foreground, 0.11)
+  property color iconInk: Util.alpha(foreground, Model.INK.label)
   // The badge may be drawn from a different family than the row's text -- SF
   // Symbols live in SF Pro Display, the fallback glyphs in a Nerd Font.
   property string iconFont: ""
@@ -125,13 +137,13 @@ Item {
     // macOS draws these as squircles; a plain radius at this size is within a
     // pixel of one, and Qt has no squircle.
     radius: Math.round(root.badgeSize * 0.26)
-    color: root.iconTint
+    color: root.iconFill
 
     Text {
       anchors.centerIn: parent
       textFormat: Text.PlainText
       text: root.icon
-      color: "white"
+      color: root.iconInk
       font.family: root.iconFont !== "" ? root.iconFont : root.fontFamily
       font.pixelSize: Math.round(root.badgeSize * 0.62)
     }
