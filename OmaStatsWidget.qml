@@ -183,6 +183,9 @@ Panel {
   // 面板底的不透明度。1 = 完全實色。主題檔是熱載入的，改這個數字不用重啟。
   readonly property real  aPanelAlpha:  themeNum("panelAlpha", 1.0)
   readonly property color aCardFill:    themeColor("cardFill")
+  // 卡片的不透明度。設計稿寫的是 100% 實色；控制中心實機量出來是
+  // 純白 @0.337。兩個都有依據，所以做成可調的。
+  readonly property real  aCardAlpha:   themeNum("cardAlpha", 1.0)
   readonly property color aInk:         themeColor("ink")
   readonly property color aSecondary:   themeColor("secondary")
   // 只有在面板底和卡片都給了顏色時才切換到實色模式。

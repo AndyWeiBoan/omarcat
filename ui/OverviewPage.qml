@@ -125,7 +125,10 @@ Column {
   function ink(level) { return 1 - root.inkDepth * (1 - level) }
   readonly property real tilePad: (host && host.aCardPadding > 0) ? host.aCardPadding
     : ((host && host.themeEdge > 0) ? host.themeEdge : Style.space(12))
-  readonly property color cardFill: host ? host.aCardFill : "transparent"
+  readonly property color cardFill: host
+    ? Qt.rgba(host.aCardFill.r, host.aCardFill.g, host.aCardFill.b,
+              host.aCardFill.a * host.aCardAlpha)
+    : "transparent"
   readonly property real cardMaxRadius: host ? host.aCardRadius : 0
   readonly property real half: Math.floor((width - gutter) / 2)
 
