@@ -16,6 +16,11 @@ Item {
   id: root
 
   property string title: ""
+  // The part, under the page's name. Identity, not state: a CPU does not
+  // become a different part while you watch it, so it belongs on the page you
+  // opened deliberately rather than on the pane you glance at. This is where
+  // macOS keeps it too -- About This Mac, not Control Center.
+  property string subtitle: ""
   // Home shows the plugin's name and no way back; every other page shows where
   // it is and how to leave.
   property bool canGoBack: false
@@ -25,14 +30,18 @@ Item {
   signal backRequested()
   signal settingsRequested()
 
-  implicitHeight: Math.max(titleText.implicitHeight, Style.space(22))
+  implicitHeight: Math.max(titleBlock.implicitHeight, Style.space(22))
 
   Text {
     id: backChevron
     textFormat: Text.PlainText
     visible: root.canGoBack
     anchors.left: parent.left
-    anchors.verticalCenter: parent.verticalCenter
+    // On the title's line, not on the block's middle: with a subtitle under it
+    // a centred chevron drifts into the gap between the two and stops reading
+    // as the control for either.
+    anchors.verticalCenter: titleBlock.verticalCenter
+    anchors.verticalCenterOffset: -Math.round(subtitleText.height / 2)
     text: "‹"
     color: Color.accent
     opacity: backArea.containsMouse ? 1 : 0.85
@@ -41,23 +50,45 @@ Item {
     font.bold: true
   }
 
-  Text {
-    id: titleText
-    textFormat: Text.PlainText
+  Column {
+    id: titleBlock
     anchors.left: root.canGoBack ? backChevron.right : parent.left
     anchors.leftMargin: root.canGoBack ? Style.space(8) : 0
     anchors.right: parent.right
     anchors.verticalCenter: parent.verticalCenter
-    // The title is where you are, not something to click. Only the chevron
-    // beside it is blue, and only because it is the control.
-    text: root.title
-    color: root.canGoBack && backArea.containsMouse
-      ? Color.accent
-      : Util.alpha(root.foreground, Model.INK.label)
-    font.family: root.fontFamily
-    font.pixelSize: Style.font.subtitle
-    font.weight: Font.DemiBold
-    elide: Text.ElideRight
+    spacing: 0
+
+    Text {
+      id: titleText
+      textFormat: Text.PlainText
+      width: parent.width
+      // The title is where you are, not something to click. Only the chevron
+      // beside it is blue, and only because it is the control.
+      text: root.title
+      color: root.canGoBack && backArea.containsMouse
+        ? Color.accent
+        : Util.alpha(root.foreground, Model.INK.label)
+      font.family: root.fontFamily
+      font.pixelSize: Style.font.subtitle
+      font.weight: Font.DemiBold
+      elide: Text.ElideRight
+    }
+
+    // Zero-height when there is nothing to say -- most machines resolve some
+    // of these and not others, and a missing part number must not shift the
+    // page under it.
+    Text {
+      id: subtitleText
+      textFormat: Text.PlainText
+      visible: root.subtitle !== ""
+      height: visible ? implicitHeight : 0
+      width: parent.width
+      text: root.subtitle
+      color: Util.alpha(root.foreground, Model.INK.secondary)
+      font.family: root.fontFamily
+      font.pixelSize: Style.font.caption
+      elide: Text.ElideRight
+    }
   }
 
   // The chevron and the title are one target: a two-character arrow is a mean
@@ -66,7 +97,7 @@ Item {
     id: backArea
     visible: root.canGoBack
     anchors.left: parent.left
-    anchors.right: titleText.right
+    anchors.right: titleBlock.right
     anchors.top: parent.top
     anchors.bottom: parent.bottom
     hoverEnabled: true

@@ -19,18 +19,37 @@ Item {
   readonly property string scriptPath:
       Qt.resolvedUrl("../bin/omarcat-hwinfo").toString().replace(/^file:\/\//, "")
 
-  // key -> "Model · spec". Missing keys are normal, not an error: a desktop has
-  // no battery and a machine whose network device has no PCI ids has no
+  // key -> { model, spec }. Missing keys are normal, not an error: a desktop
+  // has no battery and a machine whose network device has no PCI ids has no
   // resolvable product name.
   //
-  // Joined here rather than in the script so the separator is the UI's choice,
-  // and so a row with no spec gets the model alone instead of a trailing dot.
+  // Kept apart rather than joined at parse time, because the two surfaces that
+  // ask want different amounts. A page header has the width for the whole
+  // thing; a half-width tile does not, and "APPLE SSD AP0512R · 500…" is a
+  // worse answer than "APPLE SSD AP0512R" -- a truncated spec reads as a
+  // number that got cut off, which is exactly the thing a part number must
+  // never look like.
   property var models: ({})
   property var pending: ({})
 
-  function modelOf(key) {
+  function entry(key) {
     const v = root.models[key];
-    return typeof v === "string" ? v : "";
+    return (v && typeof v === "object") ? v : null;
+  }
+
+  // The part alone. What a tile shows.
+  function partOf(key) {
+    const e = root.entry(key);
+    return e ? e.model : "";
+  }
+
+  // The part and what it is made of, joined here rather than in the script so
+  // the separator is the UI's choice and a part with no spec gets no trailing
+  // dot. What a page header shows.
+  function modelOf(key) {
+    const e = root.entry(key);
+    if (!e) return "";
+    return e.spec.length > 0 ? e.model + "  ·  " + e.spec : e.model;
   }
 
   Component.onCompleted: probe.running = true
@@ -54,7 +73,7 @@ Item {
         const spec = String(parts[2] || "").trim().slice(0, 48);
         if (key.length === 0 || model.length === 0)
           return;
-        root.pending[key] = spec.length > 0 ? model + "  ·  " + spec : model;
+        root.pending[key] = { model: model, spec: spec };
       }
     }
 

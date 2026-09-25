@@ -27,6 +27,22 @@ Item {
   property real spacing: Style.space(8)
   default property alias content: column.data
 
+  // A rounded rectangle only reads as a rectangle while the straight edge
+  // still dominates. Style.cornerRadius is Hyprland's WINDOW rounding -- one
+  // number chosen for a 700px window -- and this pane asks it to serve an
+  // 88px tile and a 27px action bar with the same value. At 27 it leaves
+  // three pixels of straight edge on each side and the eye stops calling it a
+  // rectangle at all: that is why the Settings bar read as a capsule sitting
+  // under a grid of rounded squares, two shapes from two different design
+  // languages on one pane.
+  //
+  // Capping at a quarter of the height keeps it ONE rule rather than a second
+  // hand-picked number: a tile is far past the cap and keeps the window's 12,
+  // a short bar lands near 7, which is also where macOS's own small controls
+  // sit. Overridable, because a caller that wants a deliberate capsule should
+  // have to say so.
+  property real radius: Math.min(Style.cornerRadius, Math.round(height / 4))
+
   // How light the surface underneath already is. A light panel takes the
   // measured 0.337; a dark one would be washed out by it, and macOS's own dark
   // mode uses a much thinner white.
@@ -49,7 +65,7 @@ Item {
     width: root.width
     height: root.height
     z: -1
-    radius: fill.radius
+    radius: root.radius
     color: Qt.rgba(0, 0, 0, root.onLightSurface ? 0.22 : 0.30)
     spread: 6
     offsetY: 1.5
@@ -58,7 +74,7 @@ Item {
   Rectangle {
     id: fill
     anchors.fill: parent
-    radius: Style.cornerRadius
+    radius: root.radius
     color: Qt.rgba(1, 1, 1, root.onLightSurface ? 0.337 : 0.10)
     // No drawn outline. A grouped list in macOS is separated from what is
     // behind it by tone and a shadow, not by a line.
