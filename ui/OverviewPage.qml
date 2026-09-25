@@ -119,10 +119,14 @@ Column {
 
   // The theme's measured figure where there is one, otherwise exactly what
   // this page used before. See OmaStatsWidget.themeEdge.
-  readonly property real gutter: (host && host.themeEdge > 0) ? host.themeEdge : Style.space(10)
+  readonly property real gutter: (host && host.aCardGap > 0) ? host.aCardGap
+    : ((host && host.themeEdge > 0) ? host.themeEdge : Style.space(10))
   readonly property real inkDepth: host ? host.themeInkDepth : 1.0
   function ink(level) { return 1 - root.inkDepth * (1 - level) }
-  readonly property real tilePad: (host && host.themeEdge > 0) ? host.themeEdge : Style.space(12)
+  readonly property real tilePad: (host && host.aCardPadding > 0) ? host.aCardPadding
+    : ((host && host.themeEdge > 0) ? host.themeEdge : Style.space(12))
+  readonly property color cardFill: host ? host.aCardFill : "transparent"
+  readonly property real cardMaxRadius: host ? host.aCardRadius : 0
   readonly property real half: Math.floor((width - gutter) / 2)
 
   readonly property bool showFans: fans.length > 0
@@ -130,6 +134,36 @@ Column {
   // needs at the figure size -- below it the unit elides and the tile starts
   // lying about the reading.
   readonly property real fanWidth: Math.max(Style.space(112), Math.round((width - gutter) * 0.36))
+
+  // ------------------------------------------------------------------ 頁首
+  //
+  // 設計稿每一頁都有這一塊：頁名、一句話說明。**不含** mock 最上面那條
+  // 「⊗ Omarcat｜快速查看・示範資料」—— 那是原型的視窗外框（關閉鈕＋「示範
+  // 資料」標籤），不是介面的一部分；這個面板點外面就關，不需要關閉鈕，而且
+  // 檔案裡原本就寫著「這個面板刻意沒有標題列」。
+  Column {
+    width: root.width
+    spacing: Style.space(2)
+    bottomPadding: Style.space(4)
+
+    Text {
+      textFormat: Text.PlainText
+      text: "Overview"
+      color: root.foreground
+      opacity: root.ink(Model.INK.label)
+      font.family: root.fontFamily
+      font.pixelSize: Style.font.displaySmall !== undefined ? Style.font.displaySmall : Style.font.body + 6
+      font.weight: Font.Bold
+    }
+    Text {
+      textFormat: Text.PlainText
+      text: "Every status that matters, at a glance."
+      color: root.foreground
+      opacity: root.ink(Model.INK.tertiary)
+      font.family: root.fontFamily
+      font.pixelSize: Style.font.caption
+    }
+  }
 
   // ------------------------------------------------------------------ tiles
 
@@ -156,7 +190,8 @@ Column {
 
     Tile {
       id: cpuTile
-      width: root.showFans ? root.width - root.gutter - root.fanWidth : root.width
+      // 設計稿的處理器卡是整列的；風扇改成獨立的一條只讀列，放在格子下面。
+      width: root.width
       minHeight: topRow.rowHeight
       target: "cpu"
       title: "Processor"
@@ -170,34 +205,14 @@ Column {
       seriesCeiling: 100
       seriesSlots: root.service ? root.service.historyLength : 0
       padding: root.tilePad
+      cardFill: root.cardFill
+      cardMaxRadius: root.cardMaxRadius
       inkDepth: root.inkDepth
       foreground: root.foreground
       fontFamily: root.fontFamily
       onDrillRequested: function(id) { root.drill(id) }
     }
 
-    // A fan at full tilt is something you can already HEAR, which is why it
-    // earns a place on the glance page at all. It has no page of its own to
-    // drill into: the reading is the whole of what there is to say.
-    Tile {
-      id: fanTile
-      visible: root.showFans
-      width: root.fanWidth
-      minHeight: topRow.rowHeight
-      title: "Fans"
-      icon: root.badge("fans").glyph
-      iconFont: root.badge("fans").family
-      value: String(Math.round(root.peakRpm))
-      unit: "rpm"
-      // The peak is the headline -- one fan at full tilt is the answer
-      // whatever the other one is doing -- so the footnote says how many are
-      // behind that number rather than repeating it.
-      foot: root.fans.length > 1 ? root.fans.length + " fans" : String(root.fans[0] ? root.fans[0].label : "")
-      padding: root.tilePad
-      inkDepth: root.inkDepth
-      foreground: root.foreground
-      fontFamily: root.fontFamily
-    }
   }
 
   // Two columns, and the Grid wraps -- so a machine with no battery and no fan
@@ -219,6 +234,8 @@ Column {
       unit: Model.percentParts(root.memPercent).unit
       foot: Model.pairText(Model.num(root.mem.used), root.memTotal)
       padding: root.tilePad
+      cardFill: root.cardFill
+      cardMaxRadius: root.cardMaxRadius
       inkDepth: root.inkDepth
       foreground: root.foreground
       fontFamily: root.fontFamily
@@ -240,6 +257,8 @@ Column {
       unit: Model.bytesParts(root.diskAvail).unit
       foot: "free of " + Model.bytesText(root.diskTotal)
       padding: root.tilePad
+      cardFill: root.cardFill
+      cardMaxRadius: root.cardMaxRadius
       inkDepth: root.inkDepth
       foreground: root.foreground
       fontFamily: root.fontFamily
@@ -260,6 +279,8 @@ Column {
       unit: Model.rateParts(Model.num(root.net.rx)).unit
       foot: String(root.net.default || (root.net.online === false ? "offline" : ""))
       padding: root.tilePad
+      cardFill: root.cardFill
+      cardMaxRadius: root.cardMaxRadius
       inkDepth: root.inkDepth
       foreground: root.foreground
       fontFamily: root.fontFamily
@@ -276,10 +297,31 @@ Column {
       unit: Model.percentParts(Model.num(root.bat.percent)).unit
       foot: String(root.bat.status || "")
       padding: root.tilePad
+      cardFill: root.cardFill
+      cardMaxRadius: root.cardMaxRadius
       inkDepth: root.inkDepth
       foreground: root.foreground
       fontFamily: root.fontFamily
     }
+  }
+
+  // 風扇：全寬、只讀，名稱與數值同一行 —— 設計稿裡它不是一張要點進去的卡片。
+  Tile {
+    visible: root.showFans
+    width: root.width
+    compact: true
+    title: "Fans"
+    icon: root.badge("fans").glyph
+    iconFont: root.badge("fans").family
+    value: String(Math.round(root.peakRpm))
+    unit: "rpm"
+    foot: root.fans.length > 1 ? root.fans.length + " fans" : String(root.fans[0] ? root.fans[0].label : "")
+    padding: root.tilePad
+    cardFill: root.cardFill
+    cardMaxRadius: root.cardMaxRadius
+    inkDepth: root.inkDepth
+    foreground: root.foreground
+    fontFamily: root.fontFamily
   }
 
   // The way into Settings, spelled out, at the foot of the pane -- which is
@@ -297,15 +339,32 @@ Column {
       padding: Math.round(root.tilePad * 0.7)
       spacing: 0
 
-      Text {
+      // 靠左，右端一個 chevron —— 跟上面每張卡片同一個「可以進去」的語彙。
+      Item {
         width: parent.width
-        horizontalAlignment: Text.AlignHCenter
-        textFormat: Text.PlainText
-        text: "Settings"
-        color: root.foreground
-        opacity: root.ink(Model.INK.secondary)
-        font.family: root.fontFamily
-        font.pixelSize: Style.font.bodySmall
+        height: setLabel.implicitHeight
+
+        Text {
+          id: setLabel
+          anchors.left: parent.left
+          anchors.verticalCenter: parent.verticalCenter
+          textFormat: Text.PlainText
+          text: "Omarcat Settings..."
+          color: root.foreground
+          opacity: root.ink(Model.INK.label)
+          font.family: root.fontFamily
+          font.pixelSize: Style.font.bodySmall
+        }
+        Text {
+          anchors.right: parent.right
+          anchors.verticalCenter: parent.verticalCenter
+          textFormat: Text.PlainText
+          text: "\u203A"
+          color: root.foreground
+          opacity: root.ink(Model.INK.tertiary)
+          font.family: root.fontFamily
+          font.pixelSize: Style.font.bodySmall
+        }
       }
     }
 
@@ -331,4 +390,17 @@ Column {
   // this pass deliberately: getting it wrong means a pane that cries wolf,
   // and that is worth its own look at real thresholds on a machine that is
   // actually struggling rather than one sitting at 34%.
+  // 卡片外的一行說明。設計稿有，內容取它講真話的那半句（另一半「所有讀值為
+  // 原型示範」只適用於原型）。
+  Text {
+    width: root.width
+    textFormat: Text.PlainText
+    text: "The cat runs at the speed of the CPU."
+    color: root.foreground
+    opacity: root.ink(Model.INK.tertiary)
+    font.family: root.fontFamily
+    font.pixelSize: Style.font.caption
+    topPadding: Style.space(2)
+  }
+
 }

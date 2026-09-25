@@ -52,6 +52,10 @@ Item {
   // The same figure as the gap between tiles and the panel's own inset. See
   // OmaStatsWidget.themeEdge for why all three are one number.
   property real padding: Style.space(12)
+  // 只讀的一列（風扇）：名稱和數值同一行，沒有大數字、沒有 chevron。
+  property bool compact: false
+  property color cardFill: "transparent"
+  property real cardMaxRadius: 0
   // See OmaStatsWidget.themeInkDepth. 1.0 = Model.INK untouched.
   property real inkDepth: 1.0
   function ink(level) { return 1 - root.inkDepth * (1 - level) }
@@ -80,6 +84,8 @@ Item {
     // the whole row's width instead.
     width: root.width
     height: root.height
+    fill: root.cardFill
+    maxRadius: root.cardMaxRadius
     foreground: root.foreground
     padding: root.padding
     spacing: Style.space(4)
@@ -109,36 +115,57 @@ Item {
         }
       }
 
-      Column {
+      // 標題列：徽章、名稱，右端一個 chevron 表示可以進去。
+      // 型號不放在這裡 —— 設計稿把它擺在卡片底部當註腳（見下面的 footText），
+      // 那一行才是「關於這個東西的補充」，放在標題下會跟標題爭同一個位置。
+      Item {
         id: head
         width: parent.width - (root.icon !== "" ? root.badgeSize + parent.spacing : 0)
-        spacing: 0
+        height: name.implicitHeight
 
         Text {
           id: name
           textFormat: Text.PlainText
-          width: parent.width
+          anchors.left: parent.left
+          width: root.compact ? implicitWidth : undefined
+          anchors.right: root.compact ? undefined
+            : (chevron.visible ? chevron.left : parent.right)
+          anchors.rightMargin: (!root.compact && chevron.visible) ? Style.space(4) : 0
+          anchors.verticalCenter: parent.verticalCenter
           text: root.title
           color: root.foreground
-          opacity: root.ink(Model.INK.secondary)
+          opacity: root.ink(Model.INK.label)
           font.family: root.fontFamily
           font.pixelSize: Style.font.bodySmall
           elide: Text.ElideRight
         }
 
-        // Elides from the right, and the part number is written vendor-first,
-        // so what survives on a half-width tile is the half anyone would read
-        // aloud. The whole string is one tap away in the page's header.
+        // compact 時數值跟名稱同一行。
         Text {
-          id: captionText
+          id: inlineValue
+          visible: root.compact
+          anchors.left: name.right
+          anchors.leftMargin: Style.space(12)
+          anchors.verticalCenter: parent.verticalCenter
           textFormat: Text.PlainText
-          width: parent.width
-          text: root.caption
+          text: root.value + (root.unit !== "" ? " " + root.unit : "")
+          color: root.foreground
+          opacity: root.ink(Model.INK.label)
+          font.family: root.fontFamily
+          font.pixelSize: Style.font.bodySmall
+        }
+
+        Text {
+          id: chevron
+          visible: root.target !== "" && !root.compact
+          anchors.right: parent.right
+          anchors.verticalCenter: parent.verticalCenter
+          textFormat: Text.PlainText
+          text: "\u203A"
           color: root.foreground
           opacity: root.ink(Model.INK.tertiary)
           font.family: root.fontFamily
-          font.pixelSize: Style.font.caption
-          elide: Text.ElideRight
+          font.pixelSize: Style.font.bodySmall
         }
       }
     }
@@ -150,7 +177,23 @@ Item {
     // nothing in a tile descends: these are digits and a unit.
     Item {
       width: parent.width
-      height: Math.round(Style.font.displayLarge * 1.05)
+      visible: !root.compact
+      height: visible ? Math.round(Style.font.displayLarge * 1.05) : 0
+
+      // 設計稿把折線擺在數值的右邊、同一個高度帶上，不是壓在卡片底部。
+      HistoryGraph {
+        id: strip
+        visible: root.hasGraph
+        anchors.right: parent.right
+        anchors.verticalCenter: parent.verticalCenter
+        width: Math.round(parent.width * 0.52)
+        height: Math.round(parent.height * 0.62)
+        series: root.hasGraph ? [root.series] : []
+        colors: [root.seriesColor]
+        ceiling: root.seriesCeiling
+        line: true
+        showBaseline: false
+      }
 
       Measure {
         anchors.left: parent.left
@@ -165,11 +208,14 @@ Item {
       }
     }
 
+    // 卡片底部的註腳。設計稿每一張卡片都有一行：處理器是型號與溫度、記憶體
+    // 是「壓力正常・共 16 GB」。型號（caption）優先，沒有才用 foot。
     Text {
-      visible: !root.hasGraph
+      id: footText
+      visible: text !== "" && !root.compact
       textFormat: Text.PlainText
       width: parent.width
-      text: root.foot
+      text: root.caption !== "" ? root.caption : root.foot
       color: root.foreground
       opacity: root.ink(Model.INK.tertiary)
       font.family: root.fontFamily
@@ -177,25 +223,6 @@ Item {
       elide: Text.ElideRight
     }
 
-    HistoryGraph {
-      id: strip
-      visible: root.hasGraph
-      height: visible ? Style.space(16) : 0
-      width: parent.width
-      series: root.hasGraph ? [root.series] : []
-      colors: [root.seriesColor]
-      ceiling: root.seriesCeiling
-      // The scale stays ABSOLUTE -- 100% is the top of the strip -- so the
-      // baseline has to be drawn, or an idle machine's trace reads as a graph
-      // that failed to load rather than as a machine doing nothing. Auto-
-      // scaling was the alternative and it makes a 30% spike and a 100% spike
-      // draw the same mountain, which is worse than a quiet strip.
-      showBaseline: true
-      gap: 1
-      barWidth: root.seriesSlots > 0
-        ? Math.max(1, Math.floor((width + gap) / root.seriesSlots) - gap)
-        : 2
-    }
   }
 
   HoverHandler {

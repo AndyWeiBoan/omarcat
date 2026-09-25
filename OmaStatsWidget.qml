@@ -12,7 +12,11 @@ import "ui" as UI
 Panel {
   id: root
   moduleName: "io.github.andyweiboan.omarcat"
-  ipcTarget: ""
+  // 讓外部可以叫開／關這個面板（omarchy-shell omarcat open）。其他外掛都有，
+  // 少了它連開發時要截圖驗證都得靠人手動點。
+  ipcTarget: "io.github.andyweiboan.omarcat"
+  // 自己擁有這個 target，才能多掛一個「直接開到某一頁」的方法。
+  manageIpc: false
 
   readonly property var service: bar && bar.shell ? bar.shell.serviceFor("io.github.andyweiboan.omarcat") : null
   readonly property bool vertical: bar ? bar.vertical : false
@@ -94,6 +98,16 @@ Panel {
                                         Color.accent, Color.popups.background].join("|")
   onThemeStampChanged: themeIconFile.reload()
 
+  IpcHandler {
+    target: root.ipcTarget
+    function open(): void { root.open() }
+    function close(): void { root.close() }
+    function toggle(): void { root.toggle() }
+    // 直接開到指定的頁（overview / cpu / memory / disks / network / settings）。
+    // 綁快捷鍵可以一鍵跳到某一頁；開發時要截某一頁也靠它。
+    function show(tab: string): void { root.currentTab = tab; root.open() }
+  }
+
   FileView {
     id: themeIconFile
     path: Color.currentThemePath + "/omarcat.json"
@@ -116,7 +130,8 @@ Panel {
     var v = Number(root.themeIcons ? root.themeIcons.edge : NaN)
     return (isFinite(v) && v > 0) ? Math.round(v) : 0
   }
-  readonly property int panelEdge: themeEdge > 0 ? themeEdge : Style.spacing.popupPadding
+  readonly property int panelEdge: aPanelInset > 0 ? aPanelInset
+    : (themeEdge > 0 ? themeEdge : Style.spacing.popupPadding)
 
   // How deep the Overview sets its ink. Multiplies each level's REMAINING
   // LIGHTNESS rather than its alpha: a' = 1 - k(1 - a). Scaling alpha runs the
@@ -141,6 +156,35 @@ Panel {
   // the first tile sat twice as far from the top edge as it did from the
   // sides. Same figure as every other gap when it is needed at all.
   readonly property int pageGap: (tabs.visible || statusLine.visible) ? panelEdge : 0
+
+  // ---- design/DESIGN.md 方案 A 的共用視覺規格 ----
+  //
+  // 每一個都以「主題沒講就維持改動前的畫法」為預設（數字 0、顏色 transparent），
+  // 所以沒有 omarcat.json 的主題逐像素不變，不外溢。
+  //
+  // 面板與卡片是**實色不透明**，這是設計稿的明確決定，不是 HTML 原型的限制：
+  // 「不把 Apple 風格等同大量模糊或透明」，以可讀性優先。
+  function themeNum(key, dflt) {
+    var v = Number(root.themeIcons ? root.themeIcons[key] : NaN)
+    return (isFinite(v) && v > 0) ? v : dflt
+  }
+  function themeColor(key) {
+    var v = root.themeIcons ? root.themeIcons[key] : null
+    return (typeof v === "string" && v.length > 0) ? Qt.color(v) : "transparent"
+  }
+
+  readonly property int   aPanelWidth:  Math.round(themeNum("panelWidth", 0))
+  readonly property int   aPanelRadius: Math.round(themeNum("panelRadius", 0))
+  readonly property int   aPanelInset:  Math.round(themeNum("panelInset", 0))
+  readonly property int   aCardRadius:  Math.round(themeNum("cardRadius", 0))
+  readonly property int   aCardPadding: Math.round(themeNum("cardPadding", 0))
+  readonly property int   aCardGap:     Math.round(themeNum("cardGap", 0))
+  readonly property color aPanelFill:   themeColor("panelFill")
+  readonly property color aCardFill:    themeColor("cardFill")
+  readonly property color aInk:         themeColor("ink")
+  readonly property color aSecondary:   themeColor("secondary")
+  // 只有在面板底和卡片都給了顏色時才切換到實色模式。
+  readonly property bool  aSolid:       aPanelFill.a > 0 && aCardFill.a > 0
 
   readonly property real themeInkDepth: {
     var v = Number(root.themeIcons ? root.themeIcons.inkDepth : NaN)
@@ -408,11 +452,22 @@ Panel {
     // 380). It used to be "however wide the tab strip spells out", which made
     // every page as wide as the longest row of page names.
     padding: root.panelEdge
-    contentWidth: panel.fittedContentWidth(Style.space(380))
+    contentWidth: panel.fittedContentWidth(Style.space(root.aPanelWidth > 0 ? root.aPanelWidth : 380))
     // Grow with the page; KeyboardPanel caps this at the screen, which is the
     // only point at which the page scrolls.
     contentHeight: panel.fittedContentHeight(
       tabs.height + root.pageGap + statusLine.height + pageLoader.implicitHeight)
+
+    // 實色面板底。負 margin 是為了連 padding 那一圈也蓋掉，否則四邊會露出
+    // 底下半透明的材質。
+    Rectangle {
+      anchors.fill: parent
+      anchors.margins: -root.panelEdge
+      visible: root.aSolid
+      color: root.aPanelFill
+      radius: root.aPanelRadius > 0 ? root.aPanelRadius : Style.cornerRadius
+      z: -1
+    }
 
     PanelKeyCatcher {
       id: keyCatcher

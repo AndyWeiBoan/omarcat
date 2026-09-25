@@ -15,6 +15,10 @@ Canvas {
   property int barWidth: 2
   property int gap: 1
   property bool showBaseline: true
+  // 折線模式。設計稿的處理器卡用的是一條細折線，不是長條 —— 長條在滿格前
+  // 會留一大片空白，看起來像圖表壞掉。
+  property bool line: false
+  property real lineWidth: 1.5
   property color baselineColor: Util.alpha(Color.popups.text, 0.14)
 
   readonly property int pitch: Math.max(1, barWidth + gap)
@@ -55,6 +59,31 @@ Canvas {
         if (sum > max) max = sum
       }
       max *= root.headroom
+    }
+
+    if (root.line) {
+      // **折線把現有的樣本攤滿整個寬度**，不像長條那樣預留格位。長條預留是
+      // 為了讓「還沒存滿」看得出來；但一條只畫在右端一小截的折線，看起來
+      // 就只是壞掉。折線要表達的是形狀，不是進度。
+      var pts = []
+      var first = Math.max(0, len - n)
+      var avail = len - first
+      var step = avail > 1 ? width / (avail - 1) : width
+      for (var lb = 0; lb < avail; lb++) {
+        var lv = Number(list[0] ? list[0][first + lb] : 0) || 0
+        pts.push([lb * step, height - baseH - Math.min(usable, lv / max * usable)])
+      }
+      if (pts.length > 1) {
+        ctx.strokeStyle = root.colors[0] || Color.accent
+        ctx.lineWidth = Math.max(1 / dpr, root.lineWidth)
+        ctx.lineJoin = "round"
+        ctx.lineCap = "round"
+        ctx.beginPath()
+        ctx.moveTo(pts[0][0], pts[0][1])
+        for (var lp = 1; lp < pts.length; lp++) ctx.lineTo(pts[lp][0], pts[lp][1])
+        ctx.stroke()
+      }
+      return
     }
 
     for (var b = 0; b < n; b++) {

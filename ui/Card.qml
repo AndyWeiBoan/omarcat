@@ -23,6 +23,12 @@ Item {
   id: root
 
   property color foreground: Color.popups.text
+  // 方案 A：主題給了實色卡片底就用它；沒給（其他主題）維持原本的白色疊色，
+  // 所以這個改動不外溢。
+  property color fill: "transparent"
+  // 圓角的**上限**，不是圓角本身 —— 底下那條 height/4 的規則要保留，短的
+  // 動作列才不會跟著變成 10 而看起來像膠囊。0 = 沿用 Style.cornerRadius。
+  property real maxRadius: 0
   property real padding: Style.space(12)
   property real spacing: Style.space(8)
   default property alias content: column.data
@@ -41,7 +47,8 @@ Item {
   // a short bar lands near 7, which is also where macOS's own small controls
   // sit. Overridable, because a caller that wants a deliberate capsule should
   // have to say so.
-  property real radius: Math.min(Style.cornerRadius, Math.round(height / 4))
+  property real radius: Math.min(maxRadius > 0 ? maxRadius : Style.cornerRadius,
+                                 Math.round(height / 4))
 
   // How light the surface underneath already is. A light panel takes the
   // measured 0.337; a dark one would be washed out by it, and macOS's own dark
@@ -75,7 +82,8 @@ Item {
     id: fill
     anchors.fill: parent
     radius: root.radius
-    color: Qt.rgba(1, 1, 1, root.onLightSurface ? 0.337 : 0.10)
+    color: root.fill.a > 0 ? root.fill
+      : Qt.rgba(1, 1, 1, root.onLightSurface ? 0.337 : 0.10)
     // No drawn outline. A grouped list in macOS is separated from what is
     // behind it by tone and a shadow, not by a line.
     border.width: 0
