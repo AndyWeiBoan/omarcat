@@ -180,6 +180,8 @@ Panel {
   readonly property int   aCardPadding: Math.round(themeNum("cardPadding", 0))
   readonly property int   aCardGap:     Math.round(themeNum("cardGap", 0))
   readonly property color aPanelFill:   themeColor("panelFill")
+  // 面板底的不透明度。1 = 完全實色。主題檔是熱載入的，改這個數字不用重啟。
+  readonly property real  aPanelAlpha:  themeNum("panelAlpha", 1.0)
   readonly property color aCardFill:    themeColor("cardFill")
   readonly property color aInk:         themeColor("ink")
   readonly property color aSecondary:   themeColor("secondary")
@@ -458,14 +460,20 @@ Panel {
     contentHeight: panel.fittedContentHeight(
       tabs.height + root.pageGap + statusLine.height + pageLoader.implicitHeight)
 
-    // 實色面板底。負 margin 是為了連 padding 那一圈也蓋掉，否則四邊會露出
-    // 底下半透明的材質。
+    // 面板底。負 margin 是為了連 padding 那一圈也蓋掉，否則四邊會露出底下
+    // 的材質。
+    //
+    // **圓角必須跟面板本身一樣，不能用設計稿的 15。** 面板的圓角是
+    // Style.cornerRadius（來自 Hyprland 的視窗圓角，這個外掛決定不了）。
+    // 先前這裡寫 15，比面板更圓，四個角就露出底下那層半透明材質 —— 在深色
+    // 桌布上看起來就是角落一沱透明的東西。數字對不對沒有「蓋得住」重要。
     Rectangle {
       anchors.fill: parent
       anchors.margins: -root.panelEdge
       visible: root.aSolid
-      color: root.aPanelFill
-      radius: root.aPanelRadius > 0 ? root.aPanelRadius : Style.cornerRadius
+      color: Qt.rgba(root.aPanelFill.r, root.aPanelFill.g, root.aPanelFill.b,
+                     root.aPanelAlpha)
+      radius: Style.cornerRadius
       z: -1
     }
 
