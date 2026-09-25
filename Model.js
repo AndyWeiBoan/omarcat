@@ -20,6 +20,66 @@ var MODULES = [
   { id: "settings", icon: "󰒓", short: "SET", label: "Settings", page: "SettingsPage.qml", graph: false }
 ]
 
+// Apple's ink levels, as alphas over the panel's own text colour. These are
+// AppKit's semantic label colours, read straight off the Mac:
+//
+//     labelColor            black @ 0.847
+//     secondaryLabelColor   black @ 0.498
+//     tertiaryLabelColor    black @ 0.259
+//     separatorColor        black @ 0.098
+//
+// Expressed as alphas rather than colours so they work in a dark theme too,
+// where AppKit uses the same numbers over white.
+//
+// **The accent is not on this list.** In macOS blue means interactive or
+// selected; it is never a heading. Titles, section names and row labels all
+// come from here, and the accent is kept for the back chevron, links, the
+// selected segment and a graph's primary series.
+var INK = {
+  label: 0.85,
+  secondary: 0.50,
+  tertiary: 0.26,
+  separator: 0.10,
+  // A grouped list's own fill, over the popup surface.
+  groupFill: 0.05,
+  groupBorder: 0.07
+}
+
+// Overview row badges: the glyph at the head of each row.
+//
+// **The badge carries no colour of its own.** A solid saturated squircle with a
+// white symbol is macOS System Settings' idiom, and Apple's own palette was
+// measured out of AppKit and tried here -- blue CPU, purple memory, orange
+// disk, green battery. It looked good and it was wrong twice over. In this
+// panel colour already has a job: LevelBar uses it for severity, blue through
+// red, and CoreRow says so in as many words. And once the colour goes, solid
+// grey behind a white symbol is precisely what System Settings uses to draw a
+// row that is disabled.
+//
+// So the badge is the Control Center's off-state treatment instead -- a quiet
+// well with the symbol in the panel's own label ink -- which is already
+// measured and already in use one panel over. The fill and ink live in
+// OverviewRow, written against the foreground so a dark theme inverts cleanly.
+//
+// Glyphs stay numeric (see the README): the font's codepoints sit in a plane
+// that some editing tools silently mangle.
+var ROW_BADGE = {
+  cpu:     { glyph: String.fromCodePoint(0xf0ee0) },
+  memory:  { glyph: String.fromCodePoint(0xf035b) },
+  disks:   { glyph: String.fromCodePoint(0xf02ca) },
+  battery: { glyph: String.fromCodePoint(0xf0079) },
+  // Charging gets its own glyph. Levels do not: five Nerd Font battery states
+  // would be five more codepoints to keep true, and the row already prints the
+  // percentage. A theme that maps SF Symbols gets the full set (see omarcat.json).
+  "battery.charging": { glyph: String.fromCodePoint(0xf0084) },
+  network: { glyph: String.fromCodePoint(0xf06f3) },
+  fans:    { glyph: String.fromCodePoint(0xf0210) }
+}
+
+function rowBadge(id) {
+  return ROW_BADGE[id] || { glyph: "" }
+}
+
 var PANEL_TABS = ["overview", "cpu", "memory", "disks", "network"]
 
 // Every user-tunable key with its default. Flat keys keep the entry in
@@ -44,7 +104,7 @@ var RUNNERS = ["cat", "catalpha", "dog", "dancer", "sway"]
 // cat spans the whole box, the dancer about a third of it -- and inflating the
 // height was compensating for that in the wrong dimension, which just made the
 // figures taller than every other icon in the bar.
-var RUNNER_SCALE = { cat: 1.10, catalpha: 1.05, dog: 1.06, dancer: 1.06, sway: 1.07 }
+var RUNNER_SCALE = { cat: 1.10, catalpha: 0.65, dog: 1.06, dancer: 1.06, sway: 1.07 }
 
 function runnerScale(name) {
   var v = RUNNER_SCALE[name]

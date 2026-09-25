@@ -153,7 +153,7 @@ Column {
       elide: Text.ElideRight
     }
 
-    ToggleSwitch {
+    CatSwitch {
       id: flagSwitch
       anchors.right: parent.right
       anchors.verticalCenter: parent.verticalCenter
@@ -200,17 +200,14 @@ Column {
       elide: Text.ElideRight
     }
 
-    ButtonGroup {
+    CatSegmented {
       id: chips
       anchors.right: parent.right
       anchors.verticalCenter: parent.verticalCenter
       options: choiceRow.options
       value: choiceRow.value
       foreground: root.foreground
-      background: Color.popups.background
       fontFamily: root.fontFamily
-      fontSize: Style.font.caption
-      focusable: false
       onChanged: function(value) { choiceRow.changed(value) }
     }
   }

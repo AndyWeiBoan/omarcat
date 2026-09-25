@@ -10,6 +10,7 @@
 import QtQuick
 import qs.Commons
 import qs.Ui
+import "../Model.js" as Model
 
 Item {
   id: root
@@ -24,7 +25,7 @@ Item {
   signal backRequested()
   signal settingsRequested()
 
-  implicitHeight: Math.max(titleText.implicitHeight, gear.implicitHeight, Style.space(22))
+  implicitHeight: Math.max(titleText.implicitHeight, Style.space(22))
 
   Text {
     id: backChevron
@@ -33,8 +34,8 @@ Item {
     anchors.left: parent.left
     anchors.verticalCenter: parent.verticalCenter
     text: "‹"
-    color: backArea.containsMouse ? Color.accent : root.foreground
-    opacity: 0.9
+    color: Color.accent
+    opacity: backArea.containsMouse ? 1 : 0.85
     font.family: root.fontFamily
     font.pixelSize: Style.font.heading
     font.bold: true
@@ -45,14 +46,17 @@ Item {
     textFormat: Text.PlainText
     anchors.left: root.canGoBack ? backChevron.right : parent.left
     anchors.leftMargin: root.canGoBack ? Style.space(8) : 0
-    anchors.right: gear.left
-    anchors.rightMargin: Style.space(10)
+    anchors.right: parent.right
     anchors.verticalCenter: parent.verticalCenter
+    // The title is where you are, not something to click. Only the chevron
+    // beside it is blue, and only because it is the control.
     text: root.title
-    color: root.canGoBack && backArea.containsMouse ? Color.accent : Color.accent
+    color: root.canGoBack && backArea.containsMouse
+      ? Color.accent
+      : Util.alpha(root.foreground, Model.INK.label)
     font.family: root.fontFamily
     font.pixelSize: Style.font.subtitle
-    font.bold: true
+    font.weight: Font.DemiBold
     elide: Text.ElideRight
   }
 
@@ -62,7 +66,7 @@ Item {
     id: backArea
     visible: root.canGoBack
     anchors.left: parent.left
-    anchors.right: gear.left
+    anchors.right: titleText.right
     anchors.top: parent.top
     anchors.bottom: parent.bottom
     hoverEnabled: true
@@ -70,26 +74,12 @@ Item {
     onClicked: root.backRequested()
   }
 
-  // A labelled button, not a bare cog. An icon alone is a guess -- this one is
-  // the only way into settings now that the tab strip is gone, so it says what
-  // it is.
-  Button {
-    id: gear
-    anchors.right: parent.right
-    anchors.verticalCenter: parent.verticalCenter
-    // The Nerd Font cog, the same glyph Omarchy uses for settings elsewhere --
-    // not the "⚙" emoji, which the font stack renders in colour and which
-    // therefore looks nothing like the rest of the panel.
-    //
-    // Deliberately drawn with the font ALIAS rather than a resolved family:
-    // this machine's monospace is Comic Code, which has no such glyph, and it
-    // is fontconfig's per-glyph fallback that finds JetBrainsMono Nerd Font.
-    // Binding to the concrete family would produce tofu.
-    iconText: "󰒓"
-    text: "Settings"
-    bordered: true
-    foreground: root.foreground
-    fontFamily: root.fontFamily
-    onClicked: root.settingsRequested()
-  }
+  // **No settings control up here.** A gear in the corner of a popover is not
+  // a macOS pattern -- it is a Windows and GNOME one. Where macOS has to hand
+  // you off to a settings screen it puts a row at the BOTTOM of the list and
+  // spells it out: Control Center's Wi-Fi pane ends with "Wi-Fi Settings...",
+  // not with an icon you have to guess at.
+  //
+  // So the way in is the last row of the Overview list. `settingsRequested`
+  // stays for callers that still connect to it; nothing here emits it now.
 }

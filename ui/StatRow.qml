@@ -1,5 +1,6 @@
 import QtQuick
 import qs.Commons
+import "../Model.js" as Model
 
 // One "label ....... value unit" line, optionally keyed by a colour dot on
 // the left and finished by a trailing control (a mini ring) on the right.
@@ -14,10 +15,10 @@ Item {
   property bool showDot: dot.a > 0
   property color foreground: Color.popups.text
   property string fontFamily: Style.font.family
-  property real labelOpacity: 0.85
-  property bool boldValue: true
+  property real labelOpacity: Model.INK.label
+  property bool boldValue: false
   property Component trailing: null
-  property real rowHeight: Style.space(20)
+  property real rowHeight: Style.space(22)
 
   readonly property real dotInset: showDot ? Style.space(8) + Style.space(7) : 0
   readonly property real detailInset: detailText.visible ? detailText.implicitWidth + Style.space(7) : 0
@@ -62,7 +63,7 @@ Item {
     anchors.verticalCenter: parent.verticalCenter
     text: root.detail
     color: root.foreground
-    opacity: 0.45
+    opacity: Model.INK.tertiary
     font.family: root.fontFamily
     font.pixelSize: Style.font.caption
   }

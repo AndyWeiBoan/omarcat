@@ -17,63 +17,14 @@ emit() { [ -n "${2:-}" ] && printf '%s\t%s\t%s\n' "$1" "$2" "${3:-}" || true; }
 cpu=$(sed -n 's/^model name[[:space:]]*: *//p' /proc/cpuinfo | head -1)
 cpu=$(printf '%s' "$cpu" | sed -e 's/([RrTtMm][MmDd]*)//g' -e 's/ @.*$//' \
                                 -e 's/  */ /g' -e 's/^ *//' -e 's/ *$//')
-# arm64 has no "model name" line to read: /proc/cpuinfo there is implementer
-# and part numbers, so the name comes from util-linux's ID table instead.
-# Apple labels every cluster <core>-<SoC> ("Icestorm-M1-Pro"); the core name is
-# an implementation detail and the SoC is what a spec sheet prints, so it goes.
-# LC_ALL=C because those field names are translated.
-if [ -z "$cpu" ]; then
-  lsc=$(LC_ALL=C lscpu 2>/dev/null || true)
-  vendor=$(printf '%s\n' "$lsc" | sed -n 's/^Vendor ID:[[:space:]]*//p' | head -1)
-  part=$(printf '%s\n' "$lsc" | sed -n 's/^Model name:[[:space:]]*//p' | head -1)
-  case "$vendor" in
-    Apple)
-      soc=$(printf '%s' "$part" | sed -e 's/^[^-]*-//' -e 's/-/ /g')
-      [ -n "$soc" ] && cpu="Apple $soc"
-      ;;
-    *)
-      cpu="$part"
-      ;;
-  esac
-fi
-# Still nothing: the device tree's SoC id ("apple,t6000" -> "t6000") is not a
-# name anyone markets, but it beats a blank row.
-if [ -z "$cpu" ] && [ -r /proc/device-tree/compatible ]; then
-  cpu=$(tr '\0' '\n' < /proc/device-tree/compatible | sed -n 's/^[^,]*,//p' | head -1)
-fi
-
 # Cores and threads come from the first physical package; the boost clock is
 # the one number a spec sheet would print, and unlike the base clock it is a
 # fixed property of the part.
 cores=$(sed -n 's/^cpu cores[[:space:]]*: *//p' /proc/cpuinfo | head -1)
 threads=$(sed -n 's/^siblings[[:space:]]*: *//p' /proc/cpuinfo | head -1)
-# Neither line exists on arm64 either. Count what the kernel lists; SMT is not
-# a thing on the parts that get here, so threads follow cores.
-counted=""
-if [ -z "$cores" ] || [ -z "$threads" ]; then
-  cores=$(grep -c '^processor' /proc/cpuinfo)
-  threads=$cores
-  counted=1
-fi
-# Group the cores by top speed. A hybrid part reports exactly two tiers, and
-# "6P+2E" says more about the chip than "8C/8T" does; anything else falls back.
-# Only where the core counts had to be counted, which is to say only on arm64:
-# x86 already answers this properly, and a chip with favoured turbo cores shows
-# two tiers there without being hybrid at all.
-pe=""
-[ -n "$counted" ] && pe=$(cat /sys/devices/system/cpu/cpu*/cpufreq/cpuinfo_max_freq 2>/dev/null \
-     | sort -n | uniq -c \
-     | awk 'NR<=2{n[NR]=$1} END{ if (NR==2) printf "%dP+%dE", n[2], n[1] }')
-:
-# The fastest cluster, not cpu0: on a hybrid part cpu0 is an efficiency core,
-# and reporting its ceiling understates the chip by a third.
-khz=$(cat /sys/devices/system/cpu/cpu*/cpufreq/cpuinfo_max_freq 2>/dev/null | sort -n | tail -1)
+khz=$(cat /sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_max_freq 2>/dev/null || true)
 cpu_spec=""
-if [ -n "$pe" ]; then
-  cpu_spec="$pe"
-elif [ -n "$cores" ] && [ -n "$threads" ]; then
-  cpu_spec="${cores}C/${threads}T"
-fi
+[ -n "$cores" ] && [ -n "$threads" ] && cpu_spec="${cores}C/${threads}T"
 if [ -n "$khz" ]; then
   ghz=$(awk -v k="$khz" 'BEGIN{printf "%.1f GHz", k/1000000}')
   [ -n "$cpu_spec" ] && cpu_spec="$cpu_spec \xc2\xb7 $ghz" || cpu_spec="$ghz"

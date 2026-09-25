@@ -13,8 +13,11 @@ Row {
   property string fontFamily: Style.font.family
   property real valueSize: Style.font.body
   property real unitSize: Style.font.caption
-  property bool bold: true
-  property real unitOpacity: 0.55
+  // Regular, not bold. macOS sets figures in the regular weight and lets size
+  // and colour carry the emphasis; bolding every number flattens the hierarchy
+  // that size was supposed to create.
+  property bool bold: false
+  property real unitOpacity: 0.58
   property real valueOpacity: 1.0
 
   spacing: (unit === "%" || unit === "°" || unit === "") ? 0 : Style.space(3)

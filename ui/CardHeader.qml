@@ -1,8 +1,14 @@
 import QtQuick
 import qs.Commons
+import "../Model.js" as Model
 
-// Card title line: name in the accent on the left, a quiet detail on the
-// right ("CPU" ......... "4.85 GHz, 49°").
+// Card title line: the name on the left, a quiet detail on the right
+// ("CPU" ......... "4.85 GHz, 49°").
+//
+// The name is the panel's own text colour at label strength, not the accent.
+// In macOS blue is for things you can act on; a card that titles itself in
+// blue reads as a link and, when every card does it, nothing is emphasised at
+// all. See Model.INK.
 Item {
   id: root
 
@@ -17,8 +23,15 @@ Item {
   // happens to share the line.
   property bool inlineDetail: false
 
+  // The card's headline reading, set at the far right of the title line -- the
+  // shape every other page's first card already uses ("Memory ....... 38%").
+  // When it is present the detail moves in beside the title, because the right
+  // of the line now belongs to the figure.
+  property string value: ""
+  property string unit: ""
+
   width: parent ? parent.width : implicitWidth
-  implicitHeight: Math.max(titleText.implicitHeight, detailText.implicitHeight)
+  implicitHeight: Math.max(titleText.implicitHeight, detailText.implicitHeight, figure.implicitHeight)
   height: implicitHeight
 
   Text {
@@ -27,10 +40,10 @@ Item {
     anchors.left: parent.left
     anchors.verticalCenter: parent.verticalCenter
     text: root.title
-    color: Color.accent
+    color: Util.alpha(root.foreground, Model.INK.label)
     font.family: root.fontFamily
-    font.pixelSize: Style.font.subtitle
-    font.bold: true
+    font.pixelSize: Style.font.body
+    font.weight: Font.DemiBold
     elide: Text.ElideRight
     width: Math.min(implicitWidth, parent.width - detailText.width - Style.space(8))
   }
@@ -38,7 +51,7 @@ Item {
   // Anchored one way or the other, never both: an Item can only honour one
   // horizontal anchor pair at a time.
   states: State {
-    when: root.inlineDetail
+    when: root.inlineDetail || root.value !== ""
     AnchorChanges {
       target: detailText
       anchors.right: undefined
@@ -49,14 +62,26 @@ Item {
     }
   }
 
+  Measure {
+    id: figure
+    visible: root.value !== ""
+    anchors.right: parent.right
+    anchors.verticalCenter: parent.verticalCenter
+    value: root.value
+    unit: root.unit
+    valueSize: Style.font.heading
+    unitSize: Style.font.body
+    foreground: root.foreground
+    fontFamily: root.fontFamily
+  }
+
   Text {
     id: detailText
     textFormat: Text.PlainText
     anchors.right: parent.right
     anchors.verticalCenter: parent.verticalCenter
     text: root.detail
-    color: root.foreground
-    opacity: 0.6
+    color: Util.alpha(root.foreground, Model.INK.secondary)
     font.family: root.fontFamily
     font.pixelSize: Style.font.bodySmall
   }

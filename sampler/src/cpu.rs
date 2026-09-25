@@ -100,9 +100,16 @@ impl CpuSampler {
             let pkg = read_text(format!(
                 "/sys/devices/system/cpu/cpu{i}/topology/physical_package_id"
             ));
+            // The cluster too. On arm64 core_id is unique only within its
+            // cluster: an Apple part numbers its two efficiency cores 0 and 1,
+            // then starts again at 0 in each performance cluster, so keying on
+            // (package, core) alone folds eight cores into three.
+            let cluster = read_text(format!(
+                "/sys/devices/system/cpu/cpu{i}/topology/cluster_id"
+            ));
             if let Some(core) = core {
                 if !core.is_empty() {
-                    core_ids.insert((pkg.unwrap_or_default(), core));
+                    core_ids.insert((pkg.unwrap_or_default(), cluster.unwrap_or_default(), core));
                 }
             }
         }
@@ -111,8 +118,34 @@ impl CpuSampler {
         } else {
             core_ids.len()
         };
-        let efficiency = cpu_list(&read_text("/sys/devices/cpu_atom/cpus").unwrap_or_default());
-        let max_mhz = read_i64("/sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_max_freq")
+        // Intel lists its efficiency cores in one node. Everywhere else the
+        // scheduler's per-cpu capacity is the portable answer: where the
+        // capacities differ, anything under the top one is an efficiency core.
+        let mut efficiency = cpu_list(&read_text("/sys/devices/cpu_atom/cpus").unwrap_or_default());
+        if efficiency.is_empty() {
+            let caps: Vec<Option<i64>> = (0..threads)
+                .map(|i| read_i64(format!("/sys/devices/system/cpu/cpu{i}/cpu_capacity")))
+                .collect();
+            if let Some(top) = caps.iter().flatten().copied().max() {
+                efficiency = caps
+                    .iter()
+                    .enumerate()
+                    .filter_map(|(i, cap)| match cap {
+                        Some(cap) if *cap < top => Some(i),
+                        _ => None,
+                    })
+                    .collect();
+            }
+        }
+        // The fastest cluster, not cpu0: where clusters differ cpu0 is an
+        // efficiency core, and its ceiling understates the part by a third.
+        let max_mhz = (0..threads)
+            .filter_map(|i| {
+                read_i64(format!(
+                    "/sys/devices/system/cpu/cpu{i}/cpufreq/cpuinfo_max_freq"
+                ))
+            })
+            .max()
             .map(|khz| (khz as f64 / 1000.0).round() as i64)
             .unwrap_or(0);
         let freq_paths: Vec<String> = (0..threads)

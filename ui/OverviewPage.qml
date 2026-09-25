@@ -28,6 +28,17 @@ Column {
 
   readonly property var snap: service ? service.snapshot : ({})
   readonly property color s1: service ? service.series1 : Color.accent
+
+  // What a capacity bar is filled with when the reading is unremarkable.
+  //
+  // The panel's own ink, not the accent. Omarchy's first-party widgets draw
+  // their bars in the foreground colour, and a panel that draws them in blue
+  // beside them looks like a different application. Blue stays for the things
+  // you can act on -- chevrons, links, the switch that is on.
+  //
+  // `warnColor` and `dangerColor` are untouched: the bar still changes colour
+  // when the number starts to matter, which is the whole reason it has one.
+  readonly property color barColor: Util.alpha(foreground, Model.INK.label)
   readonly property color warn: service ? service.warn : Color.urgent
   readonly property color danger: service ? service.danger : Color.urgent
 
@@ -118,217 +129,234 @@ Column {
   readonly property bool hasBattery: bat.present === true
   readonly property bool charging: bat.acOnline === true
 
+  // Which battery symbol the row wears. Charging outranks the level: "is it
+  // plugged in" and "how much is left" are two questions, and while it is
+  // plugged in the first one is the answer. Full is not charging -- a bolt on a
+  // topped-up battery reads as still drawing power.
+  readonly property string batteryBadgeId: {
+    if (!root.hasBattery) return "battery";
+    const pct = Math.max(0, Math.min(100, Model.num(root.bat.percent)));
+    if (root.charging && pct < 100 && String(root.bat.status || "") !== "Full")
+      return "battery.charging";
+    return "battery." + (Math.round(pct / 25) * 25);
+  }
+
   // ------------------------------------------------------------------- CPU
 
+  // One group, not one card per subsystem. See OverviewRow for why.
   Card {
     width: root.width
     foreground: root.foreground
+    // The rows carry their own inset and their own hairlines, so the group is
+    // nothing but a rounded surface to sit them on.
+    padding: 0
+    spacing: 0
 
     OverviewRow {
-      width: parent.width
-      title: "CPU"
-      subtitle: hw.modelOf("cpu")
-      target: "cpu"
-      onDrillRequested: function(id) { if (root.host) root.host.showTab(id) }
-      value: Model.percentText(root.cpuPercent)
-      level: root.cpuPercent
-      warnAt: 70
-      dangerAt: 90
-      foreground: root.foreground
-      fontFamily: root.fontFamily
-      normalColor: root.s1
-      warnColor: root.warn
-      dangerColor: root.danger
+        showSeparator: false
+        width: parent.width
+        title: "CPU"
+        icon: root.host ? root.host.badgeFor("cpu").glyph : Model.rowBadge("cpu").glyph
+        iconFont: root.host ? root.host.badgeFor("cpu").family : root.fontFamily
+        subtitle: hw.modelOf("cpu")
+        target: "cpu"
+        onDrillRequested: function(id) { if (root.host) root.host.showTab(id) }
+        value: Model.percentText(root.cpuPercent)
+        level: root.cpuPercent
+        warnAt: 70
+        dangerAt: 90
+        foreground: root.foreground
+        fontFamily: root.fontFamily
+        normalColor: root.barColor
+        warnColor: root.warn
+        dangerColor: root.danger
 
-      // Not idle: idle is 100 minus the rest and carries no information.
-      // I/O wait does -- it is the difference between "busy" and "stuck waiting
-      // on disk" -- but it is a footnote here rather than a headline, because
-      // the sampler excludes it from the CPU figure above (cpu.rs computes busy
-      // as 100 - idle - iowait) and two numbers that disagree read as a bug.
-      detail: {
-        const parts = ["User " + Model.percentText(Model.num(root.cpu.user)),
-                       "System " + Model.percentText(Model.num(root.cpu.system)),
-                       "I/O wait " + Model.percentText(Model.num(root.cpu.iowait))];
-        // Temperature last, and only when the chip reports one: it is a
-        // different kind of reading from the three shares before it, and on a
-        // machine with no sensor an empty slot would look like a fault.
-        if (root.cpuTemp >= 0)
-          parts.push(Model.tempText(root.cpuTemp, root.temperatureUnit));
-        return parts.join("     ");
+        // Not idle: idle is 100 minus the rest and carries no information.
+        // I/O wait does -- it is the difference between "busy" and "stuck waiting
+        // on disk" -- but it is a footnote here rather than a headline, because
+        // the sampler excludes it from the CPU figure above (cpu.rs computes busy
+        // as 100 - idle - iowait) and two numbers that disagree read as a bug.
+        detail: {
+          const parts = ["User " + Model.percentText(Model.num(root.cpu.user)),
+                         "System " + Model.percentText(Model.num(root.cpu.system)),
+                         "I/O wait " + Model.percentText(Model.num(root.cpu.iowait))];
+          // Temperature last, and only when the chip reports one: it is a
+          // different kind of reading from the three shares before it, and on a
+          // machine with no sensor an empty slot would look like a fault.
+          if (root.cpuTemp >= 0)
+            parts.push(Model.tempText(root.cpuTemp, root.temperatureUnit));
+          return parts.join("     ");
+        }
       }
-    }
-  }
 
-  // ----------------------------------------------------------------- Fans
-
-  Card {
-    width: root.width
-    foreground: root.foreground
-    // Hidden where the hardware exposes none, which is most desktops and a fair
-    // number of laptops -- rather than a card reading "0 rpm", which looks like
-    // a stopped fan instead of an absent sensor.
-    visible: root.fans.length > 0
+      // Hidden where the hardware exposes none, which is most desktops and a fair
+      // number of laptops -- rather than a card reading "0 rpm", which looks like
+      // a stopped fan instead of an absent sensor.
+    OverviewRow {
+        visible: root.fans.length > 0
+        width: parent.width
+        title: "Fans"
+        icon: root.host ? root.host.badgeFor("fans").glyph : Model.rowBadge("fans").glyph
+        iconFont: root.host ? root.host.badgeFor("fans").family : root.fontFamily
+        value: Math.round(root.peakRpm) + " rpm"
+        // No bar: a fan has no capacity to be a fraction of. Its maximum is
+        // undocumented, varies per model, and scaling against the fastest speed
+        // seen this boot would move the denominator under the reader.
+        showBar: false
+        foreground: root.foreground
+        fontFamily: root.fontFamily
+        detail: {
+          if (root.fans.length <= 1)
+            return "";
+          const parts = [];
+          for (let i = 0; i < root.fans.length; i++)
+            parts.push(root.fans[i].label + "  " + Math.round(root.fans[i].rpm));
+          return parts.join("     ");
+        }
+      }
 
     OverviewRow {
+        width: parent.width
+        title: "Memory"
+        icon: root.host ? root.host.badgeFor("memory").glyph : Model.rowBadge("memory").glyph
+        iconFont: root.host ? root.host.badgeFor("memory").family : root.fontFamily
+        subtitle: hw.modelOf("memory")
+        target: "memory"
+        onDrillRequested: function(id) { if (root.host) root.host.showTab(id) }
+        value: Model.percentText(root.memPercent)
+        level: root.memPercent
+        // 85% is where the original OmaStats memory page already calls it danger
+        // (MemoryPage.qml). Matching it keeps the two pages telling one story.
+        warnAt: 70
+        dangerAt: 85
+        foreground: root.foreground
+        fontFamily: root.fontFamily
+        normalColor: root.barColor
+        warnColor: root.warn
+        dangerColor: root.danger
+        detail: Model.pairText(Model.num(root.mem.used), root.memTotal)
+      }
+
+    OverviewRow {
+        visible: root.rootVolume !== null
+        width: parent.width
+        title: "Disk"
+        icon: root.host ? root.host.badgeFor("disks").glyph : Model.rowBadge("disks").glyph
+        iconFont: root.host ? root.host.badgeFor("disks").family : root.fontFamily
+        subtitle: hw.modelOf("disk")
+        target: "disks"
+        onDrillRequested: function(id) { if (root.host) root.host.showTab(id) }
+        value: Model.percentText(root.diskPercent)
+        level: root.diskPercent
+        warnAt: 80
+        dangerAt: 90
+        foreground: root.foreground
+        fontFamily: root.fontFamily
+        normalColor: root.barColor
+        warnColor: root.warn
+        dangerColor: root.danger
+        // Capacity, not throughput. Read/write rates are transient and live on
+        // the Disks tab; free space is the thing worth knowing without asking.
+        detail: {
+          const parts = ["Used " + Model.bytesText(root.diskUsed),
+                         "Free " + Model.bytesText(root.rootVolume ? Model.num(root.rootVolume.avail) : 0)];
+          // The drive's own sensor, which the sampler attaches to each volume on
+          // it. Two volumes on one NVMe report the same figure, which is fine
+          // here -- this row only ever shows the volume the system lives on.
+          const temp = root.rootVolume ? Model.num(root.rootVolume.temp, -1) : -1;
+          if (temp >= 0)
+            parts.push(Model.tempText(temp, root.temperatureUnit));
+          return parts.join("  ·  ");
+        }
+      }
+
+    OverviewRow {
+        visible: root.hasBattery
+        width: parent.width
+        title: "Battery"
+        icon: root.host ? root.host.badgeFor(root.batteryBadgeId, "battery").glyph : Model.rowBadge("battery").glyph
+        iconFont: root.host ? root.host.badgeFor(root.batteryBadgeId, "battery").family : root.fontFamily
+        subtitle: hw.modelOf("battery")
+        value: Model.percentText(Model.num(root.bat.percent))
+        level: Model.num(root.bat.percent)
+        // Upside down: here a LOW reading is the bad one.
+        inverted: true
+        warnAt: 30
+        dangerAt: 15
+        // Plugged in and filling is never a warning, however low the number --
+        // a red bar on a charging laptop is noise, not information.
+        forceNormal: root.charging
+        foreground: root.foreground
+        fontFamily: root.fontFamily
+        normalColor: root.barColor
+        warnColor: root.warn
+        dangerColor: root.danger
+        detail: {
+          const parts = [String(root.bat.status || "")];
+          // Whichever clock applies: to full while charging, to empty otherwise.
+          // Both are minutes and both read 0 before the sampler has an estimate,
+          // so say nothing rather than "0:00".
+          const mins = root.charging ? Model.num(root.bat.timeToFull) : Model.num(root.bat.timeToEmpty);
+          // Only a believable one. UPower on this machine reports the port
+          // controller as always-on-AC, which makes the remaining-time estimate
+          // run to four figures of hours -- "25560:00 left" is not a reading,
+          // it is a missing one wearing a number.
+          if (mins > 0 && mins <= 24 * 60)
+            parts.push(Model.clockText(mins) + " left");
+          // Health came here when the Battery tab went. It is the one number on
+          // that page that was not already on this one or on the bar, and it is
+          // worth a glance once in a while even though it changes over years
+          // rather than seconds.
+          const health = Model.num(root.bat.health);
+          if (health > 0)
+            parts.push("health " + Math.round(health) + "%");
+          return parts.join("  ·  ");
+        }
+      }
+
+      // No bar. A bar means "this fraction of a capacity is gone", and a network
+      // link has no capacity worth dividing by: 100 KB/s is fast or slow
+      // depending on the line. Scaling to the largest rate seen this boot was the
+      // alternative, and a denominator that keeps moving makes the bar lie.
+    OverviewRow {
+        width: parent.width
+        title: "Network"
+        icon: root.host ? root.host.badgeFor("network").glyph : Model.rowBadge("network").glyph
+        iconFont: root.host ? root.host.badgeFor("network").family : root.fontFamily
+        subtitle: hw.modelOf("network")
+        target: "network"
+        onDrillRequested: function(id) { if (root.host) root.host.showTab(id) }
+        value: String(root.net.default || (root.net.online === false ? "offline" : ""))
+        showBar: false
+        valueIsText: true
+        foreground: root.foreground
+        fontFamily: root.fontFamily
+        detail: {
+          const parts = ["↓ " + Model.rateText(Model.num(root.net.rx)),
+                         "↑ " + Model.rateText(Model.num(root.net.tx))];
+          const temp = root.tempOfChip("Wi-Fi");
+          if (temp >= 0)
+            parts.push(Model.tempText(temp, root.temperatureUnit));
+          return parts.join("     ");
+        }
+      }
+
+
+    // The way into Settings, spelled out, at the bottom of the list -- which is
+    // where macOS puts it ("Wi-Fi Settings..." at the foot of Control Center's
+    // Wi-Fi pane) rather than as a gear in the corner of the title bar. No
+    // badge, like the reference, but indented to the same left edge as the
+    // rows above it so the list keeps one column.
+    OverviewRow {
       width: parent.width
-      title: "Fans"
-      value: Math.round(root.peakRpm) + " rpm"
-      // No bar: a fan has no capacity to be a fraction of. Its maximum is
-      // undocumented, varies per model, and scaling against the fastest speed
-      // seen this boot would move the denominator under the reader.
+      reserveIcon: true
+      title: "Settings"
+      target: "settings"
+      onDrillRequested: function(id) { if (root.host) root.host.showTab(id) }
       showBar: false
       foreground: root.foreground
       fontFamily: root.fontFamily
-      detail: {
-        if (root.fans.length <= 1)
-          return "";
-        const parts = [];
-        for (let i = 0; i < root.fans.length; i++)
-          parts.push(root.fans[i].label + "  " + Math.round(root.fans[i].rpm));
-        return parts.join("     ");
-      }
     }
-  }
 
-  // ---------------------------------------------------------------- Memory
-
-  Card {
-    width: root.width
-    foreground: root.foreground
-
-    OverviewRow {
-      width: parent.width
-      title: "Memory"
-      subtitle: hw.modelOf("memory")
-      target: "memory"
-      onDrillRequested: function(id) { if (root.host) root.host.showTab(id) }
-      value: Model.percentText(root.memPercent)
-      level: root.memPercent
-      // 85% is where the original OmaStats memory page already calls it danger
-      // (MemoryPage.qml). Matching it keeps the two pages telling one story.
-      warnAt: 70
-      dangerAt: 85
-      foreground: root.foreground
-      fontFamily: root.fontFamily
-      normalColor: root.s1
-      warnColor: root.warn
-      dangerColor: root.danger
-      detail: Model.pairText(Model.num(root.mem.used), root.memTotal)
-    }
-  }
-
-  // ------------------------------------------------------------------ Disk
-
-  Card {
-    width: root.width
-    foreground: root.foreground
-    visible: root.rootVolume !== null
-
-    OverviewRow {
-      width: parent.width
-      title: "Disk"
-      subtitle: hw.modelOf("disk")
-      target: "disks"
-      onDrillRequested: function(id) { if (root.host) root.host.showTab(id) }
-      value: Model.percentText(root.diskPercent)
-      level: root.diskPercent
-      warnAt: 80
-      dangerAt: 90
-      foreground: root.foreground
-      fontFamily: root.fontFamily
-      normalColor: root.s1
-      warnColor: root.warn
-      dangerColor: root.danger
-      // Capacity, not throughput. Read/write rates are transient and live on
-      // the Disks tab; free space is the thing worth knowing without asking.
-      detail: {
-        const parts = ["Used " + Model.bytesText(root.diskUsed),
-                       "Free " + Model.bytesText(root.rootVolume ? Model.num(root.rootVolume.avail) : 0)];
-        // The drive's own sensor, which the sampler attaches to each volume on
-        // it. Two volumes on one NVMe report the same figure, which is fine
-        // here -- this row only ever shows the volume the system lives on.
-        const temp = root.rootVolume ? Model.num(root.rootVolume.temp, -1) : -1;
-        if (temp >= 0)
-          parts.push(Model.tempText(temp, root.temperatureUnit));
-        return parts.join("  ·  ");
-      }
-    }
-  }
-
-  // --------------------------------------------------------------- Battery
-
-  Card {
-    width: root.width
-    foreground: root.foreground
-    visible: root.hasBattery
-
-    OverviewRow {
-      width: parent.width
-      title: "Battery"
-      subtitle: hw.modelOf("battery")
-      value: Model.percentText(Model.num(root.bat.percent))
-      level: Model.num(root.bat.percent)
-      // Upside down: here a LOW reading is the bad one.
-      inverted: true
-      warnAt: 30
-      dangerAt: 15
-      // Plugged in and filling is never a warning, however low the number --
-      // a red bar on a charging laptop is noise, not information.
-      forceNormal: root.charging
-      foreground: root.foreground
-      fontFamily: root.fontFamily
-      normalColor: root.s1
-      warnColor: root.warn
-      dangerColor: root.danger
-      detail: {
-        const parts = [String(root.bat.status || "")];
-        // Whichever clock applies: to full while charging, to empty otherwise.
-        // Both are minutes and both read 0 before the sampler has an estimate,
-        // so say nothing rather than "0:00".
-        const mins = root.charging ? Model.num(root.bat.timeToFull) : Model.num(root.bat.timeToEmpty);
-        if (mins > 0)
-          parts.push(Model.clockText(mins) + " left");
-        // Health came here when the Battery tab went. It is the one number on
-        // that page that was not already on this one or on the bar, and it is
-        // worth a glance once in a while even though it changes over years
-        // rather than seconds.
-        const health = Model.num(root.bat.health);
-        if (health > 0)
-          parts.push("health " + Math.round(health) + "%");
-        return parts.join("  ·  ");
-      }
-    }
-  }
-
-  // --------------------------------------------------------------- Network
-
-  Card {
-    width: root.width
-    foreground: root.foreground
-
-    // No bar. A bar means "this fraction of a capacity is gone", and a network
-    // link has no capacity worth dividing by: 100 KB/s is fast or slow
-    // depending on the line. Scaling to the largest rate seen this boot was the
-    // alternative, and a denominator that keeps moving makes the bar lie.
-    OverviewRow {
-      width: parent.width
-      title: "Network"
-      subtitle: hw.modelOf("network")
-      target: "network"
-      onDrillRequested: function(id) { if (root.host) root.host.showTab(id) }
-      value: String(root.net.default || (root.net.online === false ? "offline" : ""))
-      showBar: false
-      valueIsText: true
-      foreground: root.foreground
-      fontFamily: root.fontFamily
-      detail: {
-        const parts = ["↓ " + Model.rateText(Model.num(root.net.rx)),
-                       "↑ " + Model.rateText(Model.num(root.net.tx))];
-        const temp = root.tempOfChip("Wi-Fi");
-        if (temp >= 0)
-          parts.push(Model.tempText(temp, root.temperatureUnit));
-        return parts.join("     ");
-      }
-    }
   }
 }

@@ -32,13 +32,51 @@ Item {
 
   implicitHeight: Style.space(6)
 
+  // Each segment's own span, with a floor: a segment that has ANYTHING in it
+  // gets at least one bar-height of width.
+  //
+  // Without it the legend names colours the bar does not show. A 345 MB
+  // partition on a 227 GB disk is 0.15% -- a third of a pixel -- so the row
+  // beneath sits there with a purple dot beside it pointing at nothing. The
+  // floor is taken back out of the largest segment, so the total is unchanged
+  // and only the biggest band pays, where a percent is invisible anyway.
+  //
+  // A segment that is genuinely empty still gets nothing. The floor says "some,
+  // not none"; it does not invent anything.
+  readonly property real minSpan: Math.min(0.2, height / Math.max(1, width))
+
+  readonly property var spans: {
+    const adj = [];
+    for (let i = 0; i < root.segments.length; i++)
+      adj.push(Math.max(0, Number(root.segments[i].value) || 0));
+
+    let owed = 0;
+    for (let i = 0; i < adj.length; i++) {
+      if (adj[i] > 0 && adj[i] < root.minSpan) {
+        owed += root.minSpan - adj[i];
+        adj[i] = root.minSpan;
+      }
+    }
+    // Take it back from the biggest, one bite at a time, never below the floor.
+    while (owed > 1e-6) {
+      let big = -1;
+      for (let i = 0; i < adj.length; i++)
+        if (adj[i] > root.minSpan && (big < 0 || adj[i] > adj[big])) big = i;
+      if (big < 0) break;
+      const take = Math.min(owed, adj[big] - root.minSpan);
+      adj[big] -= take;
+      owed -= take;
+    }
+    return adj;
+  }
+
   // Cumulative ends, clamped so a sampler that overshoots slightly cannot paint
   // past the track.
   readonly property var bounds: {
     const out = [];
     let acc = 0;
-    for (let i = 0; i < root.segments.length; i++) {
-      acc += Math.max(0, Number(root.segments[i].value) || 0);
+    for (let i = 0; i < root.spans.length; i++) {
+      acc += root.spans[i];
       out.push(Math.min(1, acc));
     }
     return out;
